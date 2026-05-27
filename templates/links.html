@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi-One Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a; color: #e2e8f0;
+    min-height: 100vh; padding: 20px;
+  }
+  header {
+    text-align: center; margin-bottom: 30px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  header h1 { font-size: 1.6rem; }
+  header .sub { font-size: 0.8rem; color: #64748b; }
+  header .ip {
+    font-size: 0.75rem; color: #475569;
+    background: #1e293b; padding: 3px 12px; border-radius: 10px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px; max-width: 1000px; margin: 0 auto;
+  }
+  .card {
+    background: #1e293b; border-radius: 12px; padding: 18px;
+    border: 1px solid #334155; transition: border-color 0.3s;
+    text-decoration: none; color: inherit; display: block;
+  }
+  .card:hover { border-color: #475569; }
+  .card-top {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 10px;
+  }
+  .card-icon { font-size: 1.8rem; }
+  .card-status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.7rem; padding: 3px 10px; border-radius: 12px;
+  }
+  .status-online { background: #166534; color: #4ade80; }
+  .status-offline { background: #7f1d1d; color: #fca5a5; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .dot-green { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+  .dot-red { background: #ef4444; }
+  .card-title { font-weight: 600; font-size: 1rem; margin-bottom: 4px; }
+  .card-desc { font-size: 0.75rem; color: #94a3b8; margin-bottom: 6px; }
+  .card-url {
+    font-size: 0.7rem; color: #64748b; font-family: monospace;
+    word-break: break-all;
+  }
+  .card-link {
+    display: inline-block; margin-top: 10px;
+    font-size: 0.75rem; color: #818cf8; text-decoration: none;
+    padding: 4px 0;
+  }
+  .card-link:hover { text-decoration: underline; }
+
+  .sys-info {
+    max-width: 1000px; margin: 30px auto 0;
+    background: #1e293b; border-radius: 12px;
+    padding: 16px 20px; border: 1px solid #334155;
+    display: flex; gap: 24px; flex-wrap: wrap;
+    font-size: 0.75rem; color: #94a3b8;
+  }
+  .sys-info strong { color: #e2e8f0; }
+  .footer {
+    text-align: center; margin-top: 30px;
+    font-size: 0.65rem; color: #334155;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🖥️ pi-one</h1>
+  <span class="sub">Raspberry Pi 4B — Debian 13 — aarch64</span>
+  <span class="ip" id="sys-ip">192.168.178.131</span>
+</header>
+
+<div class="grid">
+  <a href="http://192.168.178.131:5000" class="card" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🍼</span>
+      <span class="card-status status-online" id="status-babycam">
+        <span class="status-dot dot-green"></span> online
+      </span>
+    </div>
+    <div class="card-title">BabyCam</div>
+    <div class="card-desc">Baby-Monitor mit Bewegungserkennung, Live-Audio & Telegram-Alarmen</div>
+    <div class="card-url">192.168.178.131:5000</div>
+  </a>
+
+  <a href="http://192.168.178.131:8123" class="card" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🏠</span>
+      <span class="card-status status-online" id="status-ha">
+        <span class="status-dot dot-green"></span> online
+      </span>
+    </div>
+    <div class="card-title">Home Assistant</div>
+    <div class="card-desc">Smart-Home-Zentrale: Licht, PV-Monitoring, Alexa, Wallbox</div>
+    <div class="card-url">192.168.178.131:8123</div>
+  </a>
+
+  <a href="http://192.168.178.131:9000" class="card" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🐳</span>
+      <span class="card-status status-online" id="status-portainer">
+        <span class="status-dot dot-green"></span> online
+      </span>
+    </div>
+    <div class="card-title">Portainer</div>
+    <div class="card-desc">Docker-Container-Verwaltung (Web-Oberfläche)</div>
+    <div class="card-url">192.168.178.131:9443 (HTTPS)<br>192.168.178.131:8000 (HTTP)</div>
+  </a>
+
+  <div class="card">
+    <div class="card-top">
+      <span class="card-icon">📡</span>
+      <span class="card-status status-online" id="status-mqtt">
+        <span class="status-dot dot-green"></span> online
+      </span>
+    </div>
+    <div class="card-title">Mosquitto MQTT</div>
+    <div class="card-desc">Nachrichten-Broker für PV-Daten, Home Assistant & Sensoren</div>
+    <div class="card-url">mqtt://192.168.178.131:1883<br>ws://192.168.178.131:9001</div>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <span class="card-icon">☀️</span>
+      <span class="card-status status-online" id="status-sungrow">
+        <span class="status-dot dot-green"></span> online
+      </span>
+    </div>
+    <div class="card-title">Sungrow Bridge</div>
+    <div class="card-desc">PV-Wechselrichter-Monitoring (SH8.0RT) via Modbus → MQTT</div>
+    <div class="card-url">intern (Modbus → MQTT)</div>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <span class="card-icon">🔌</span>
+      <span class="card-status status-online">
+        <span class="status-dot dot-green"></span> online
+      </span>
+    </div>
+    <div class="card-title">SSH</div>
+    <div class="card-desc">Terminal-Zugriff für Wartung & Konfiguration</div>
+    <div class="card-url">ssh pi-one.local / 192.168.178.131:22</div>
+  </div>
+</div>
+
+<div class="sys-info" id="sys-info">
+  <div><strong>Hostname:</strong> pi-one</div>
+  <div><strong>Architektur:</strong> aarch64</div>
+  <div><strong>OS:</strong> Debian 13</div>
+  <div><strong>Kernel:</strong> <span id="sys-kernel">—</span></div>
+  <div><strong>Uptime:</strong> <span id="sys-uptime">—</span></div>
+  <div><strong>Docker:</strong> Rootless</div>
+  <div><strong>IP:</strong> 192.168.178.131</div>
+</div>
+
+<div class="footer">
+  Hermes Agent Dashboard — automatisch aktualisiert
+</div>
+
+<script>
+  async function checkStatus() {
+    // System-Info
+    try {
+      const r = await fetch('/api/status');
+      if (r.ok) {
+        document.getElementById('sys-uptime').textContent = (await r.clone().json()).uptime || '—';
+      }
+    } catch(e) {}
+
+    // Home Assistant
+    try {
+      const r = await fetch('http://192.168.178.131:8123', {mode:'no-cors'});
+      setStatus('ha', true);
+    } catch(e) { setStatus('ha', false); }
+
+    // Portainer HTTP
+    try {
+      const r = await fetch('http://192.168.178.131:8000', {mode:'no-cors'});
+      setStatus('portainer', true);
+    } catch(e) { setStatus('portainer', false); }
+
+    // BabyCam is this server
+    setStatus('babycam', true);
+
+    // Docker-dependent services (MQTT, Sungrow) — via container check
+    try {
+      const r = await fetch('/api/status');
+      setStatus('mqtt', r.ok);
+      setStatus('sungrow', r.ok);
+    } catch(e) {
+      setStatus('mqtt', false);
+      setStatus('sungrow', false);
+    }
+  }
+
+  function setStatus(id, online) {
+    const el = document.getElementById('status-'+id);
+    if (!el) return;
+    if (online) {
+      el.className = 'card-status status-online';
+      el.innerHTML = '<span class="status-dot dot-green"></span> online';
+    } else {
+      el.className = 'card-status status-offline';
+      el.innerHTML = '<span class="status-dot dot-red"></span> offline';
+    }
+  }
+
+  checkStatus();
+  setInterval(checkStatus, 30000);
+</script>
+</body>
+</html>
