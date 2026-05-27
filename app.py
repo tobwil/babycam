@@ -428,10 +428,6 @@ def audio_thread():
 def index():
     return render_template('dashboard.html')
 
-@app.route('/links')
-def links():
-    return render_template('links.html')
-
 @app.route('/video_feed')
 def video_feed():
     def generate():
