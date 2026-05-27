@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BabyCam – Kinderzimmer Monitor</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a; color: #e2e8f0;
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    background: #1e293b; padding: 10px 20px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 2px solid #334155; flex-shrink: 0;
+  }
+  header h1 { font-size: 1.2rem; }
+  main {
+    display: flex; gap: 12px; padding: 12px;
+    flex: 1; overflow: hidden; min-height: 0;
+  }
+  .video-panel {
+    flex: 2; background: #000; border-radius: 12px; overflow: hidden;
+    position: relative; min-width: 0; display: flex; align-items: center;
+  }
+  .video-panel img { width: 100%; display: block; }
+  .sidebar {
+    flex: 1; display: flex; flex-direction: column; gap: 10px;
+    min-width: 300px; max-width: 400px; overflow-y: auto;
+  }
+  .card {
+    background: #1e293b; border-radius: 10px; padding: 14px;
+    border: 1px solid #334155;
+  }
+  .card h3 {
+    font-size: 0.8rem; text-transform: uppercase;
+    color: #94a3b8; margin-bottom: 8px; letter-spacing: 0.05em;
+  }
+
+  /* Badges */
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 0.85rem;
+    transition: all 0.3s;
+  }
+  .badge-calm { background: #166534; color: #4ade80; }
+  .badge-alert { background: #7f1d1d; color: #fca5a5; animation: pulse 1s infinite; }
+  .badge-night { background: #1e1b4b; color: #a5b4fc; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+  .indicator { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .indicator-green { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+  .indicator-red { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+  .indicator-gray { background: #64748b; }
+  .indicator-blue { background: #818cf8; box-shadow: 0 0 6px #818cf8; }
+
+  /* Meter */
+  .meter { height: 10px; background: #334155; border-radius: 5px; overflow: hidden; margin: 6px 0; }
+  .meter-fill { height: 100%; background: linear-gradient(90deg, #4ade80, #fbbf24, #ef4444); border-radius: 5px; transition: width 0.15s; }
+
+  /* Stats */
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stat { flex: 1; text-align: center; min-width: 50px; }
+  .stat-value { font-size: 1.3rem; font-weight: 700; }
+  .stat-label { font-size: 0.65rem; color: #64748b; text-transform: uppercase; }
+
+  /* Config sliders – touch-optimiert */
+  .cfg-row { margin-bottom: 14px; }
+  .cfg-row label { display: flex; justify-content: space-between; font-size: 0.8rem; color: #94a3b8; margin-bottom: 4px; }
+  .cfg-row input[type=range] {
+    width: 100%; accent-color: #818cf8;
+    min-height: 36px;  /* Touch-Ziel */
+    cursor: pointer;
+  }
+  .cfg-row input[type=number] {
+    width: 60px; min-height: 32px; background: #334155; border: 1px solid #475569;
+    color: #e2e8f0; border-radius: 4px; padding: 4px 8px; font-size: 0.85rem;
+    text-align: center;
+  }
+  .cfg-toggle { display: flex; align-items: center; gap: 10px; margin: 8px 0; min-height: 40px; }
+  .cfg-toggle span { font-size: 0.8rem; color: #94a3b8; }
+  .toggle {
+    width: 48px; min-width: 48px; height: 28px; background: #334155; border-radius: 14px;
+    position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0;
+  }
+  .toggle.on { background: #4ade80; }
+  .toggle::after {
+    content: ''; width: 22px; height: 22px; background: #fff; border-radius: 50%;
+    position: absolute; top: 3px; left: 3px; transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* Snapshot gallery */
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 6px; }
+  .gallery-item { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; cursor: pointer; }
+  .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
+  .gallery-item .reason {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    font-size: 0.55rem; padding: 2px 4px; text-align: center;
+    background: rgba(0,0,0,0.7);
+  }
+  .reason.motion { color: #fbbf24; }
+  .reason.cry { color: #fca5a5; }
+
+  /* Modal */
+  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; }
+  .modal.active { display: flex; }
+  .modal img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
+  .modal-close { position: absolute; top: 20px; right: 30px; font-size: 2rem; color: #fff; cursor: pointer; }
+
+  /* Tabs – touch-freundlich */
+  .tabs { display: flex; gap: 2px; margin-bottom: 0; }
+  .tab {
+    flex: 1; padding: 10px 4px; text-align: center; font-size: 0.78rem;
+    background: #334155; cursor: pointer; border-radius: 6px 6px 0 0;
+    color: #94a3b8; transition: all 0.2s; white-space: nowrap;
+    min-height: 40px; display: flex; align-items: center; justify-content: center;
+  }
+  .tab.active { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-bottom: none; }
+  .tab-content { display: none; background: #1e293b; border: 1px solid #334155; border-top: none; border-radius: 0 0 10px 10px; padding: 14px; max-height: 420px; overflow-y: auto; }
+  .tab-content.active { display: block; }
+  .tabs-wrapper { border-radius: 10px; overflow: hidden; }
+
+  /* Buttons – touch-freundlich */
+  .btn {
+    padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer;
+    font-size: 0.8rem; background: #334155; color: #e2e8f0; transition: background 0.2s;
+    min-height: 40px; white-space: nowrap;
+  }
+  .btn:hover { background: #475569; }
+  .btn-danger { background: #7f1d1d; }
+  .btn-danger:hover { background: #991b1b; }
+  .btn-save { background: #166534; }
+  .btn-save:hover { background: #15803d; }
+  .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+
+  @media (max-width: 768px) {
+    main { flex-direction: column; }
+    .sidebar { max-width: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🍼 BabyCam</h1>
+  <div id="header-status"></div>
+</header>
+<main>
+  <div class="video-panel">
+    <img src="/video_feed" id="video" alt="Live Feed">
+  </div>
+  <div class="sidebar">
+    <!-- Status Card -->
+    <div class="card">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <div class="status-badge badge-calm" id="motion-badge">
+          <span class="indicator indicator-green"></span> Ruhig
+        </div>
+        <div class="status-badge badge-calm" id="sound-badge">
+          <span class="indicator indicator-green"></span> Leise
+        </div>
+        <div class="status-badge badge-calm" id="night-badge" style="display:none">
+          <span class="indicator indicator-blue"></span> Nacht
+        </div>
+      </div>
+    </div>
+
+    <!-- Sound Meter -->
+    <div class="card">
+      <h3>🔊 Geräuschpegel</h3>
+      <div class="meter"><div class="meter-fill" id="sound-meter" style="width:0%"></div></div>
+      <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#64748b;">
+        <span>leise</span><span id="sound-value">0.000</span><span>laut</span>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <h3>📊 Werte</h3>
+      <div class="stats">
+        <div class="stat"><div class="stat-value" id="fps-display">--</div><div class="stat-label">FPS</div></div>
+        <div class="stat"><div class="stat-value" id="uptime-display">--</div><div class="stat-label">Uptime</div></div>
+        <div class="stat"><div class="stat-value" id="brightness-display">--</div><div class="stat-label">Helligkeit</div></div>
+        <div class="stat"><div class="stat-value" id="snap-count">0</div><div class="stat-label">Snapshots</div></div>
+      </div>
+    </div>
+
+    <!-- Audio Alarm Toggle -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h3 style="margin-bottom:2px;">🔔 Audio-Alarm</h3>
+          <span style="font-size:0.65rem;color:#64748b;">Piept bei Bewegung/Schreien</span>
+        </div>
+        <div class="toggle on" id="toggle-audio" onclick="toggleAudioAlarm()"></div>
+      </div>
+    </div>
+
+    <!-- Live Audio Toggle -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h3 style="margin-bottom:2px;">🔊 Live-Audio</h3>
+          <span style="font-size:0.65rem;color:#64748b;">Raumton live mithören</span>
+        </div>
+        <div class="toggle" id="toggle-live-audio" onclick="toggleLiveAudio()"></div>
+      </div>
+    </div>
+
+    <!-- Tabbed: Snapshots + Config -->
+    <div class="tabs-wrapper">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('snapshots')">📸 Snapshots</div>
+        <div class="tab" onclick="switchTab('config')">⚙️ Alarm</div>
+        <div class="tab" onclick="switchTab('camera')">📷 Kamera</div>
+        <div class="tab" onclick="switchTab('events')">📋 Events</div>
+      </div>
+
+      <div class="tab-content active" id="tab-snapshots">
+        <div class="gallery" id="gallery">
+          <div style="color:#64748b;font-size:0.75rem;">Noch keine Snapshots</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-danger" onclick="clearSnapshots()">Alle löschen</button>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-config">
+        <div class="cfg-row">
+          <label>Bewegungs-Empfindlichkeit <span id="val-motion_threshold">12</span></label>
+          <input type="range" min="2" max="50" value="12" id="cfg-motion_threshold"
+                 oninput="updateRange('motion_threshold')">
+        </div>
+        <div class="cfg-row">
+          <label>Min. Bewegungsfläche <span id="val-motion_min_area">800</span> px²</label>
+          <input type="range" min="100" max="5000" step="50" value="800" id="cfg-motion_min_area"
+                 oninput="updateRange('motion_min_area')">
+        </div>
+        <div class="cfg-row">
+          <label>Geräusch-Schwelle <span id="val-sound_threshold">0.04</span> RMS</label>
+          <input type="range" min="0.01" max="0.50" step="0.01" value="0.04" id="cfg-sound_threshold"
+                 oninput="updateRange('sound_threshold')">
+        </div>
+        <div class="cfg-toggle">
+          <div class="toggle on" id="toggle-noise" onclick="document.getElementById('toggle-noise').classList.toggle('on')"></div>
+          <span>Allgemeine Geräusche erkennen (nicht nur Schreien)</span>
+        </div>
+        <div class="cfg-row">
+          <label>Motion-Alert Cooldown <span id="val-alert_cooldown_motion">30</span>s</label>
+          <input type="range" min="5" max="300" step="5" value="30" id="cfg-alert_cooldown_motion"
+                 oninput="updateRange('alert_cooldown_motion')">
+        </div>
+        <div class="cfg-row">
+          <label>Mindest-Bewegungsdauer <span id="val-motion_duration_min">8</span>s</label>
+          <input type="range" min="1" max="30" step="1" value="8" id="cfg-motion_duration_min"
+                 oninput="updateRange('motion_duration_min')">
+        </div>
+        <div class="cfg-row">
+          <label>Schrei-Alert Cooldown <span id="val-alert_cooldown_cry">60</span>s</label>
+          <input type="range" min="10" max="600" step="10" value="60" id="cfg-alert_cooldown_cry"
+                 oninput="updateRange('alert_cooldown_cry')">
+        </div>
+        <div class="cfg-toggle">
+          <div class="toggle on" id="toggle-night" onclick="toggleNight()"></div>
+          <span>Nachtmodus (auto)</span>
+        </div>
+        <div class="cfg-row">
+          <label>Nacht-Helligkeitsschwelle <span id="val-night_brightness_threshold">40</span></label>
+          <input type="range" min="10" max="100" value="40" id="cfg-night_brightness_threshold"
+                 oninput="updateRange('night_brightness_threshold')">
+        </div>
+
+        <h3 style="font-size:0.8rem;margin-top:14px;margin-bottom:4px;color:#94a3b8;">📱 Telegram (optional)</h3>
+        <div class="cfg-toggle">
+          <div class="toggle" id="toggle-telegram" onclick="toggleTelegram()"></div>
+          <span>Telegram-Notifications</span>
+        </div>
+
+        <div id="telegram-wizard" style="display:none; margin-top:10px;">
+          <div style="background:#0f172a;border-radius:8px;padding:12px;margin-bottom:8px;">
+            <div style="font-size:0.75rem;color:#94a3b8;margin-bottom:6px;">
+              <strong>Schritt 1:</strong> Öffne
+              <a href="https://t.me/BotFather" target="_blank" style="color:#818cf8;">@BotFather</a>
+              und sende <code style="background:#1e293b;padding:1px 4px;border-radius:3px;">/newbot</code>
+            </div>
+          </div>
+          <div class="cfg-row">
+            <label>Bot-Token <span style="color:#64748b;">(von BotFather)</span></label>
+            <input type="text" id="cfg-telegram_bot_token" placeholder="123456:ABCdef..."
+                   style="width:100%;background:#334155;border:1px solid #475569;color:#e2e8f0;border-radius:4px;padding:4px 8px;font-size:0.7rem;"
+                   oninput="onTokenChange()">
+          </div>
+          <div id="telegram-step3" style="display:none;">
+            <div style="background:#0f172a;border-radius:8px;padding:12px;margin-bottom:8px;">
+              <div style="font-size:0.75rem;color:#94a3b8;margin-bottom:6px;">
+                <strong>Schritt 3:</strong> Klicke auf den Link und sende <code style="background:#1e293b;padding:1px 4px;border-radius:3px;">/start</code> im Chat
+              </div>
+              <a id="telegram-bot-link" href="#" target="_blank"
+                 style="display:inline-block;background:#166534;color:#4ade80;padding:6px 14px;border-radius:6px;text-decoration:none;font-size:0.8rem;margin-bottom:6px;">
+                🤖 Mit Bot chatten
+              </a>
+              <br>
+              <button class="btn" onclick="discoverChat()" id="btn-discover" style="margin-top:6px;">
+                🔍 Chat-ID automatisch erkennen
+              </button>
+              <span id="discover-status" style="font-size:0.65rem;margin-left:8px;"></span>
+            </div>
+          </div>
+          <div id="telegram-connected" style="display:none;background:#166534;border-radius:8px;padding:10px;margin-top:6px;">
+            <span style="color:#4ade80;font-size:0.8rem;">✅ Verbunden: <strong id="telegram-connected-name"></strong></span>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-save" onclick="saveConfig()">💾 Speichern</button>
+          <button class="btn" onclick="loadConfigFromServer()">↻ Laden</button>
+          <button class="btn" onclick="testTelegram()" title="Test-Nachricht senden">📱 Test</button>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-camera">
+        <h3 style="font-size:0.8rem;margin-bottom:8px;color:#94a3b8;">🎛️ Bildsteuerung</h3>
+        <div class="cfg-toggle">
+          <div class="toggle on" id="toggle-camera-auto" onclick="toggleCameraAuto()"></div>
+          <span>Auto-Modus (Kamera regelt selbst)</span>
+        </div>
+        <div id="camera-manual" style="display:none;">
+          <div class="cfg-row">
+            <label>Helligkeit <span id="val-camera_brightness">128</span></label>
+            <input type="range" min="0" max="255" value="128" id="cfg-camera_brightness"
+                   oninput="updateRange('camera_brightness')">
+          </div>
+          <div class="cfg-row">
+            <label>Kontrast <span id="val-camera_contrast">128</span></label>
+            <input type="range" min="0" max="255" value="128" id="cfg-camera_contrast"
+                   oninput="updateRange('camera_contrast')">
+          </div>
+          <div class="cfg-row">
+            <label>Sättigung <span id="val-camera_saturation">128</span></label>
+            <input type="range" min="0" max="255" value="128" id="cfg-camera_saturation"
+                   oninput="updateRange('camera_saturation')">
+          </div>
+          <div class="cfg-row">
+            <label>Schärfe <span id="val-camera_sharpness">128</span></label>
+            <input type="range" min="0" max="255" value="128" id="cfg-camera_sharpness"
+                   oninput="updateRange('camera_sharpness')">
+          </div>
+          <div class="cfg-row">
+            <label>Gain <span id="val-camera_gain">0</span></label>
+            <input type="range" min="0" max="100" value="0" id="cfg-camera_gain"
+                   oninput="updateRange('camera_gain')">
+          </div>
+          <div style="font-size:0.65rem;color:#64748b;margin-top:4px;">
+            💡 Tipp: Nachts Auto-Modus AUS → Helligkeit & Gain hoch für bessere Sicht.
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-save" onclick="saveConfig()">💾 Speichern</button>
+          <button class="btn" onclick="loadConfigFromServer()">↻ Laden</button>
+          <button class="btn" onclick="resetCamera()">🔄 Reset</button>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-events">
+        <div id="event-log" style="max-height:250px;overflow-y:auto;font-size:0.75rem;">
+          <div style="color:#64748b;">Warte auf Ereignisse...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Lightbox Modal -->
+<div class="modal" id="lightbox" onclick="closeLightbox()">
+  <span class="modal-close">&times;</span>
+  <img id="lightbox-img" src="">
+</div>
+
+<script>
+  // ── Tabs ──
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector(`.tab[onclick*="${name}"]`).classList.add('active');
+    document.getElementById(`tab-${name}`).classList.add('active');
+  }
+
+  // ── Range slider updates ──
+  function updateRange(key) {
+    document.getElementById(`val-${key}`).textContent = document.getElementById(`cfg-${key}`).value;
+    if (key.startsWith('camera_')) previewCamera();
+  }
+
+  // ── Kamera Live-Preview ──
+  function previewCamera() {
+    const auto = document.getElementById('toggle-camera-auto').classList.contains('on');
+    const cfg = { camera_auto: auto };
+    if (!auto) {
+      document.querySelectorAll('#tab-camera input[type=range]').forEach(el => {
+        cfg[el.id.replace('cfg-', '')] = parseFloat(el.value);
+      });
+    }
+    fetch('/api/camera/preview', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(cfg)
+    }).catch(()=>{});
+  }
+
+  function toggleNight() {
+    document.getElementById('toggle-night').classList.toggle('on');
+  }
+
+  function toggleCameraAuto() {
+    const on = document.getElementById('toggle-camera-auto').classList.toggle('on');
+    document.getElementById('camera-manual').style.display = on ? 'none' : 'block';
+    previewCamera();  // Live anwenden
+  }
+
+  async function resetCamera() {
+    // Defaults setzen
+    document.getElementById('cfg-camera_brightness').value = 128;
+    document.getElementById('cfg-camera_contrast').value = 128;
+    document.getElementById('cfg-camera_saturation').value = 128;
+    document.getElementById('cfg-camera_sharpness').value = 128;
+    document.getElementById('cfg-camera_gain').value = 0;
+    document.getElementById('val-camera_brightness').textContent = '128';
+    document.getElementById('val-camera_contrast').textContent = '128';
+    document.getElementById('val-camera_saturation').textContent = '128';
+    document.getElementById('val-camera_sharpness').textContent = '128';
+    document.getElementById('val-camera_gain').textContent = '0';
+    // Auto-Modus einschalten
+    document.getElementById('toggle-camera-auto').classList.add('on');
+    document.getElementById('camera-manual').style.display = 'none';
+    previewCamera();  // Live auf Defaults setzen
+    // Speichern
+    await saveConfig();
+  }
+
+  // ── Config API ──
+  async function loadConfigFromServer() {
+    try {
+      const r = await fetch('/api/config');
+      const cfg = await r.json();
+      for (const [k, v] of Object.entries(cfg)) {
+        const el = document.getElementById(`cfg-${k}`);
+        const valEl = document.getElementById(`val-${k}`);
+        if (el) {
+          if (el.type === 'checkbox') el.checked = v;
+          else el.value = v;
+        }
+        if (valEl) valEl.textContent = v;
+      }
+      const tn = document.getElementById('toggle-night');
+      if (cfg.night_mode_auto) tn.classList.add('on');
+      else tn.classList.remove('on');
+
+      // Noise toggle
+      const tn2 = document.getElementById('toggle-noise');
+      if (cfg.noise_alert_enabled !== false) tn2.classList.add('on');  // default on
+      else tn2.classList.remove('on');
+
+      // Camera toggle
+      const tca = document.getElementById('toggle-camera-auto');
+      const camManual = document.getElementById('camera-manual');
+      if (cfg.camera_auto !== false) {
+        tca.classList.add('on');
+        camManual.style.display = 'none';
+      } else {
+        tca.classList.remove('on');
+        camManual.style.display = 'block';
+      }
+      previewCamera();  // Geladene Werte live anwenden
+
+      // Telegram toggles + text fields
+      const tt = document.getElementById('toggle-telegram');
+      if (cfg.telegram_enabled) {
+        tt.classList.add('on');
+        document.getElementById('telegram-wizard').style.display = 'block';
+      } else {
+        tt.classList.remove('on');
+        document.getElementById('telegram-wizard').style.display = 'none';
+      }
+      document.getElementById('cfg-telegram_bot_token').value = cfg.telegram_bot_token || '';
+      document.getElementById('cfg-telegram_chat_id').value = cfg.telegram_chat_id || '';
+
+      // Falls schon Chat-ID gespeichert → als verbunden anzeigen
+      if (cfg.telegram_chat_id && cfg.telegram_bot_token) {
+        document.getElementById('telegram-connected').style.display = 'block';
+        document.getElementById('telegram-connected-name').textContent = cfg.telegram_chat_id;
+        document.getElementById('telegram-step3').style.display = 'none';
+        // Bot-Name fetchen
+        if (cfg.telegram_bot_token) fetchBotName(cfg.telegram_bot_token);
+      } else if (cfg.telegram_bot_token && cfg.telegram_bot_token.includes(':')) {
+        document.getElementById('telegram-step3').style.display = 'block';
+        fetchBotName(cfg.telegram_bot_token);
+      }
+    } catch(e) {}
+  }
+
+  async function saveConfig() {
+    const cfg = {};
+    document.querySelectorAll('#tab-config input[type=range]').forEach(el => {
+      cfg[el.id.replace('cfg-', '')] = parseFloat(el.value);
+    });
+    // Kamera-Settings
+    document.querySelectorAll('#tab-camera input[type=range]').forEach(el => {
+      cfg[el.id.replace('cfg-', '')] = parseFloat(el.value);
+    });
+    cfg['night_mode_auto'] = document.getElementById('toggle-night').classList.contains('on');
+    cfg['noise_alert_enabled'] = document.getElementById('toggle-noise').classList.contains('on');
+    cfg['camera_auto'] = document.getElementById('toggle-camera-auto').classList.contains('on');
+    cfg['telegram_enabled'] = document.getElementById('toggle-telegram').classList.contains('on');
+    cfg['telegram_bot_token'] = document.getElementById('cfg-telegram_bot_token').value.trim();
+    const chatEl = document.getElementById('cfg-telegram_chat_id');
+    if (chatEl) cfg['telegram_chat_id'] = chatEl.value.trim();  // Nur wenn Feld existiert
+    try {
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(cfg)
+      });
+      const btn = document.querySelector('.btn-save');
+      btn.textContent = '✅ Gespeichert!';
+      setTimeout(() => btn.textContent = '💾 Speichern', 1500);
+    } catch(e) {
+      alert('Fehler beim Speichern');
+    }
+  }
+
+  // ── Status Polling ──
+  let lastMotionTime = null;
+  let lastCryTime = null;
+
+  async function pollStatus() {
+    try {
+      const r = await fetch('/api/status');
+      const s = await r.json();
+
+      // ── Audio Alarm ──
+      if (s.motion) beepAlert('motion');
+      if (s.cry_detected) beepAlert('cry');
+      if (s.noise_detected) beepAlert('noise');
+
+      // Motion
+      const mb = document.getElementById('motion-badge');
+      if (s.motion) {
+        mb.className = 'status-badge badge-alert';
+        mb.innerHTML = '<span class="indicator indicator-red"></span> Bewegung!';
+        lastMotionTime = Date.now();
+      } else {
+        const since = lastMotionTime ? Math.round((Date.now() - lastMotionTime) / 1000) : null;
+        if (since !== null && since < 5) {
+          mb.className = 'status-badge badge-calm';
+          mb.innerHTML = `<span class="indicator indicator-green"></span> Vor ${since}s`;
+        } else {
+          mb.className = 'status-badge badge-calm';
+          mb.innerHTML = '<span class="indicator indicator-green"></span> Ruhig';
+        }
+      }
+
+      // Sound / Cry / Noise
+      const sb = document.getElementById('sound-badge');
+      if (s.cry_detected) {
+        sb.className = 'status-badge badge-alert';
+        sb.innerHTML = '<span class="indicator indicator-red"></span> 🔊 Schreien!';
+        lastCryTime = Date.now();
+      } else if (s.noise_detected) {
+        sb.className = 'status-badge badge-alert';
+        sb.innerHTML = '<span class="indicator indicator-red"></span> 📢 Geräusch!';
+      } else {
+        sb.className = 'status-badge badge-calm';
+        sb.innerHTML = '<span class="indicator indicator-green"></span> Leise';
+      }
+
+      // Night mode
+      const nb = document.getElementById('night-badge');
+      if (s.night_mode) {
+        nb.style.display = 'inline-flex';
+        nb.className = 'status-badge badge-night';
+        nb.innerHTML = '<span class="indicator indicator-blue"></span> 🌙 Nacht';
+      } else {
+        nb.style.display = 'none';
+      }
+
+      // Sound meter
+      const pct = Math.min(100, (s.sound_level / 0.2) * 100);
+      document.getElementById('sound-meter').style.width = pct + '%';
+      document.getElementById('sound-value').textContent = s.sound_level.toFixed(3);
+
+      // Stats
+      document.getElementById('fps-display').textContent = s.fps_actual ? s.fps_actual.toFixed(1) : '--';
+      document.getElementById('uptime-display').textContent = s.uptime;
+      document.getElementById('brightness-display').textContent = s.brightness ? s.brightness.toFixed(0) : '--';
+      document.getElementById('snap-count').textContent = s.snapshot_count;
+
+      // Header
+      let hdr = '<span class="status-badge badge-calm" style="font-size:0.75rem;padding:4px 10px;"><span class="indicator indicator-green"></span> Alles ruhig</span>';
+      if (s.night_mode) hdr = '<span class="status-badge badge-night" style="font-size:0.75rem;padding:4px 10px;"><span class="indicator indicator-blue"></span> 🌙 Nachtmodus</span>';
+      if (s.motion) hdr = '<span class="status-badge badge-alert" style="font-size:0.75rem;padding:4px 10px;"><span class="indicator indicator-red"></span> Bewegung</span>';
+      if (s.cry_detected) hdr = '<span class="status-badge badge-alert" style="font-size:0.75rem;padding:4px 10px;"><span class="indicator indicator-red"></span> 🔊 Schreien</span>';
+      if (s.noise_detected && !s.cry_detected) hdr = '<span class="status-badge badge-alert" style="font-size:0.75rem;padding:4px 10px;"><span class="indicator indicator-red"></span> 📢 Geräusch</span>';
+      document.getElementById('header-status').innerHTML = hdr;
+    } catch(e) {}
+  }
+
+  // ── Snapshots ──
+  async function pollSnapshots() {
+    try {
+      const r = await fetch('/api/snapshots');
+      const snaps = await r.json();
+      const gal = document.getElementById('gallery');
+      if (snaps.length === 0) {
+        gal.innerHTML = '<div style="color:#64748b;font-size:0.75rem;">Noch keine Snapshots</div>';
+        return;
+      }
+      // Neueste zuerst
+      const recent = snaps.slice(-24).reverse();
+      const icons = { motion: '👣', cry: '🔊', noise: '📢' };
+      gal.innerHTML = recent.map(s => `
+        <div class="gallery-item" onclick="openLightbox('/api/snapshot/${s.file}')">
+          <img src="/api/snapshot/${s.file}" alt="${s.reason}" loading="lazy">
+          <div class="reason ${s.reason}">${icons[s.reason] || '📋'} ${new Date(s.time).toLocaleTimeString('de-DE')}</div>
+        </div>
+      `).join('');
+    } catch(e) {}
+  }
+
+  async function clearSnapshots() {
+    if (!confirm('Alle Snapshots löschen?')) return;
+    await fetch('/api/snapshots/clear', {method: 'POST'});
+    document.getElementById('gallery').innerHTML = '<div style="color:#64748b;font-size:0.75rem;">Noch keine Snapshots</div>';
+  }
+
+  function openLightbox(url) {
+    document.getElementById('lightbox-img').src = url;
+    document.getElementById('lightbox').classList.add('active');
+  }
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('active');
+  }
+
+  // ── Events ──
+  async function pollHistory() {
+    try {
+      const r = await fetch('/api/history');
+      const h = await r.json();
+      const allEvents = [
+        ...h.motion.map(t => ({ time: t, type: 'motion' })),
+        ...h.sound.filter(s => s.cry).map(s => ({
+          time: new Date(s.t * 1000).toISOString(), type: 'cry'
+        })),
+        ...h.sound.filter(s => s.noise && !s.cry).map(s => ({
+          time: new Date(s.t * 1000).toISOString(), type: 'noise'
+        }))
+      ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 20);
+
+      document.getElementById('event-log').innerHTML = allEvents.length === 0
+        ? '<div style="color:#64748b;">Warte auf Ereignisse...</div>'
+        : allEvents.map(e => {
+            const t = new Date(e.time);
+            const icons = { motion: ['👣', '#fbbf24'], cry: ['🔊', '#fca5a5'], noise: ['📢', '#fbbf24'] };
+            const [icon, color] = icons[e.type] || ['📋', '#94a3b8'];
+            const labels = { motion: 'Bewegung', cry: 'Schreien', noise: 'Geräusch' };
+            return `<div style="padding:3px 0;border-bottom:1px solid #1e293b;font-size:0.7rem;color:${color}">${icon} ${t.toLocaleTimeString('de-DE')} – ${labels[e.type]}</div>`;
+          }).join('');
+    } catch(e) {}
+  }
+
+  // ── Startup ──
+  loadConfigFromServer();
+  setInterval(pollStatus, 500);
+  setInterval(pollSnapshots, 3000);
+  setInterval(pollHistory, 2000);
+
+  // ── Audio Alarm (Web Audio API) ──
+  let audioAlarmOn = true;
+  let audioCtx = null;
+  let lastAlertBeep = { motion: 0, cry: 0, noise: 0 };
+
+  function toggleAudioAlarm() {
+    audioAlarmOn = !audioAlarmOn;
+    document.getElementById('toggle-audio').classList.toggle('on', audioAlarmOn);
+  }
+
+  // ── Live Audio Stream ──
+  let liveAudioOn = false;
+  let liveAudioCtx = null;
+  let liveAudioNext = 0;
+
+  function toggleLiveAudio() {
+    liveAudioOn = !liveAudioOn;
+    document.getElementById('toggle-live-audio').classList.toggle('on', liveAudioOn);
+    if (liveAudioOn) {
+      // AudioContext braucht User-Geste — hier durch Klick gegeben
+      pollLiveAudio();
+    } else {
+      liveAudioNext = 0;
+    }
+  }
+
+  async function pollLiveAudio() {
+    if (!liveAudioOn) return;
+    try {
+      const r = await fetch('/api/audio/latest');
+      if (r.status === 204) { setTimeout(pollLiveAudio, 250); return; }
+      const buf = await r.arrayBuffer();
+      if (!liveAudioCtx) liveAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const decoded = await liveAudioCtx.decodeAudioData(buf);
+      const src = liveAudioCtx.createBufferSource();
+      src.buffer = decoded;
+      src.connect(liveAudioCtx.destination);
+      const now = liveAudioCtx.currentTime;
+      if (liveAudioNext < now) liveAudioNext = now;
+      src.start(liveAudioNext);
+      liveAudioNext += decoded.duration;
+      // Aggressives Polling für minimale Latenz
+      const delay = Math.max(60, (decoded.duration * 1000) - 300);
+      setTimeout(pollLiveAudio, delay);
+    } catch(e) {
+      setTimeout(pollLiveAudio, 1000);
+    }
+  }
+
+  function toggleTelegram() {
+    const on = document.getElementById('toggle-telegram').classList.toggle('on');
+    document.getElementById('telegram-wizard').style.display = on ? 'block' : 'none';
+  }
+
+  function onTokenChange() {
+    const token = document.getElementById('cfg-telegram_bot_token').value.trim();
+    const step3 = document.getElementById('telegram-step3');
+    const link = document.getElementById('telegram-bot-link');
+    if (token.includes(':')) {
+      // Token sieht gültig aus → Bot-Namen extrahieren
+      step3.style.display = 'block';
+      fetchBotName(token);
+
+      // Auto-Save: Token + Toggle ON sofort speichern, damit es Reloads überlebt
+      document.getElementById('toggle-telegram').classList.add('on');
+      const cfg = {};
+      document.querySelectorAll('#tab-config input[type=range]').forEach(el => {
+        cfg[el.id.replace('cfg-', '')] = parseFloat(el.value);
+      });
+      cfg['night_mode_auto'] = document.getElementById('toggle-night').classList.contains('on');
+      cfg['noise_alert_enabled'] = document.getElementById('toggle-noise').classList.contains('on');
+      cfg['telegram_enabled'] = true;
+      cfg['telegram_bot_token'] = token;
+      const chatEl2 = document.getElementById('cfg-telegram_chat_id');
+      if (chatEl2) cfg['telegram_chat_id'] = chatEl2.value.trim();
+      fetch('/api/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(cfg)
+      }).catch(()=>{});
+    } else {
+      step3.style.display = 'none';
+    }
+  }
+
+  async function fetchBotName(token) {
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+      const d = await r.json();
+      if (d.ok) {
+        const name = d.result.username;
+        document.getElementById('telegram-bot-link').href = `https://t.me/${name}`;
+        document.getElementById('telegram-bot-link').textContent = `🤖 @${name} öffnen`;
+      }
+    } catch(e) {}
+  }
+
+  async function discoverChat() {
+    const btn = document.getElementById('btn-discover');
+    const status = document.getElementById('discover-status');
+    btn.textContent = '⏳ Suche...';
+    status.textContent = '';
+
+    // Token aus dem Eingabefeld holen (auch wenn noch nicht gespeichert)
+    const token = document.getElementById('cfg-telegram_bot_token').value.trim();
+
+    try {
+      const r = await fetch('/api/telegram/discover', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({token: token})
+      });
+      const d = await r.json();
+      if (d.ok) {
+        btn.textContent = '✅ Verbunden!';
+        btn.style.background = '#166534';
+        document.getElementById('discover-status').textContent = '';
+        document.getElementById('telegram-connected').style.display = 'block';
+        document.getElementById('telegram-connected-name').textContent = d.name;
+        document.getElementById('telegram-step3').style.display = 'none';
+        // Toggle einschalten + Config vom Server laden (dort ist jetzt alles gespeichert)
+        document.getElementById('toggle-telegram').classList.add('on');
+        loadConfigFromServer();
+      } else {
+        btn.textContent = '🔄 Nochmal versuchen';
+        status.textContent = '⚠️ ' + (d.error || 'Unbekannter Fehler');
+        status.style.color = '#fbbf24';
+      }
+    } catch(e) {
+      btn.textContent = '❌ Fehler';
+      status.textContent = e.message;
+      status.style.color = '#fca5a5';
+    }
+  }
+
+  async function testTelegram() {
+    const btn = document.querySelector('[onclick="testTelegram()"]');
+    btn.textContent = '⏳';
+    try {
+      const r = await fetch('/api/telegram/test', {method:'POST'});
+      const data = await r.json();
+      if (data.ok) {
+        btn.textContent = '✅ OK';
+        setTimeout(() => btn.textContent = '📱 Test', 2000);
+      } else {
+        btn.textContent = '❌ Fehler';
+        alert('Telegram-Test fehlgeschlagen: ' + (data.error || 'Unbekannt'));
+        setTimeout(() => btn.textContent = '📱 Test', 3000);
+      }
+    } catch(e) {
+      btn.textContent = '❌';
+      alert('Netzwerkfehler: ' + e.message);
+      setTimeout(() => btn.textContent = '📱 Test', 3000);
+    }
+  }
+
+  function beepAlert(type) {
+    if (!audioAlarmOn) return;
+    // Cooldown: nur 1x pro 10s pro Alert-Typ
+    const now = Date.now();
+    if (now - lastAlertBeep[type] < 10000) return;
+    lastAlertBeep[type] = now;
+
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      // Motion = tiefer Ton, Cry = hoher Ton, Noise = mittlerer Ton
+      if (type === 'motion') {
+        osc.frequency.value = 520;
+        gain.gain.value = 0.3;
+      } else if (type === 'cry') {
+        osc.frequency.value = 880;
+        gain.gain.value = 0.5;
+      } else {
+        // noise
+        osc.frequency.value = 660;
+        gain.gain.value = 0.35;
+      }
+
+      // Zweifacher Beep: beep-beep
+      const t0 = audioCtx.currentTime;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(gain.gain.value, t0 + 0.05);
+      gain.gain.linearRampToValueAtTime(0, t0 + 0.2);
+      gain.gain.linearRampToValueAtTime(gain.gain.value, t0 + 0.3);
+      gain.gain.linearRampToValueAtTime(0, t0 + 0.5);
+
+      osc.start(t0);
+      osc.stop(t0 + 0.6);
+    } catch(e) { /* Audio-API nicht verfügbar */ }
+  }
+
+  // Escape schließt Lightbox
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+</script>
+</body>
+</html>

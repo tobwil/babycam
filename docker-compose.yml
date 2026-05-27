@@ -1,0 +1,20 @@
+services:
+  babycam:
+    image: babycam:latest
+    container_name: babycam
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - /dev/video0:/dev/video0
+      - /dev/snd:/dev/snd
+      - babycam_data:/app/snapshots   # Snapshots persistent
+      - ./config.json:/app/config.json  # Config persistent
+    environment:
+      - TZ=Europe/Berlin
+    group_add:
+      - "29"   # audio
+      - "44"   # video
+
+volumes:
+  babycam_data:
