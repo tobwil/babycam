@@ -251,6 +251,17 @@
           <span>🎤 Live-Audio-Stream + Pegelanzeige</span>
         </div>
         <div class="cfg-row">
+          <label>Audio-Gerät</label>
+          <input type="text" id="cfg-audio_device" value="plughw:3,0"
+                 style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 8px;font-size:0.75rem;">
+          <span style="font-size:0.55rem;color:#64748b;">z.B. plughw:1,0 — mit arecord -l finden</span>
+        </div>
+        <div class="cfg-row">
+          <label>Audio-Rate <span id="val-audio_rate">16000</span>Hz</label>
+          <input type="range" min="8000" max="48000" step="8000" value="16000" id="cfg-audio_rate"
+                 oninput="updateRange('audio_rate')">
+        </div>
+        <div class="cfg-row">
           <label>Motion-Alert Cooldown <span id="val-alert_cooldown_motion">30</span>s</label>
           <input type="range" min="5" max="300" step="5" value="30" id="cfg-alert_cooldown_motion"
                  oninput="updateRange('alert_cooldown_motion')">
@@ -544,6 +555,7 @@
     cfg['telegram_enabled'] = document.getElementById('toggle-telegram').classList.contains('on');
     cfg['video_enabled'] = document.getElementById('toggle-video-enabled').classList.contains('on');
     cfg['audio_enabled'] = document.getElementById('toggle-audio-enabled').classList.contains('on');
+    cfg['audio_device'] = document.getElementById('cfg-audio_device').value.trim();
     cfg['telegram_bot_token'] = document.getElementById('cfg-telegram_bot_token').value.trim();
     const chatEl = document.getElementById('cfg-telegram_chat_id');
     if (chatEl) cfg['telegram_chat_id'] = chatEl.value.trim();  // Nur wenn Feld existiert
