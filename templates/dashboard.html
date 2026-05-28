@@ -241,10 +241,22 @@
           <span style="font-size:0.55rem;color:#64748b;">100 = schon winzige Bewegungen melden | 5000 = nur große Bewegungen</span>
         </div>
         <div class="cfg-row">
-          <label>🔊 Lautstärke-Schwelle <span id="val-sound_threshold">0.04</span></label>
-          <input type="range" min="0.01" max="0.50" step="0.01" value="0.04" id="cfg-sound_threshold"
+          <label>🔊 Lautstärke-Schwelle <span id="val-sound_threshold">0.02</span></label>
+          <input type="range" min="0.01" max="0.50" step="0.01" value="0.02" id="cfg-sound_threshold"
                  oninput="updateRange('sound_threshold')">
           <span style="font-size:0.55rem;color:#64748b;">0.01 = Flüstern reicht | 0.50 = nur lautes Schreien</span>
+        </div>
+        <div class="cfg-row">
+          <label>⏱️ Geräusch muss anhalten für <span id="val-noise_duration">0.5</span>s</label>
+          <input type="range" min="0.3" max="5.0" step="0.1" value="0.5" id="cfg-noise_duration"
+                 oninput="updateRange('noise_duration')">
+          <span style="font-size:0.55rem;color:#64748b;">Verhindert Fehlalarme durch kurzes Poltern</span>
+        </div>
+        <div class="cfg-row">
+          <label>⏱️ Schreien muss anhalten für <span id="val-cry_duration">1.0</span>s</label>
+          <input type="range" min="0.3" max="5.0" step="0.1" value="1.0" id="cfg-cry_duration"
+                 oninput="updateRange('cry_duration')">
+          <span style="font-size:0.55rem;color:#64748b;">Erst nach dieser Dauer wird „Schreien" ausgelöst</span>
         </div>
         <div class="cfg-toggle">
           <div class="toggle on" id="toggle-noise" onclick="document.getElementById('toggle-noise').classList.toggle('on')"></div>

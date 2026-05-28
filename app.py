@@ -348,6 +348,7 @@ def video_thread():
                     if motion_dur >= fresh_cfg["motion_duration_min"]:
                         if now_ts - state["last_motion_alert"] > fresh_cfg["alert_cooldown_motion"]:
                             state["last_motion_alert"] = now_ts
+                            debug(f"👣 BEWEGUNG-Snapshot! (Dauer={motion_dur:.1f}s)")
                             save_snapshot(raw, "motion")
                 else:
                     # Bewegung gestoppt → Reset
@@ -424,9 +425,11 @@ def send_telegram_alert(reason, snapshot_path=None):
     """Sendet Alert via Telegram Bot API (async, non-blocking)."""
     cfg = load_config()
     if not cfg.get("telegram_enabled") or not cfg.get("telegram_bot_token") or not cfg.get("telegram_chat_id"):
+        debug(f"📱 Telegram übersprungen ({reason}): {'deaktiviert' if not cfg.get('telegram_enabled') else 'kein Token' if not cfg.get('telegram_bot_token') else 'keine Chat-ID'}")
         return
     with telegram_lock:
         telegram_queue.append((reason, snapshot_path, time.time()))
+    debug(f"📱 Telegram-Alert in Warteschlange: {reason}")
 
 def telegram_worker():
     """Hintergrund-Thread: Versendet queued Telegram-Nachrichten."""
@@ -479,8 +482,10 @@ def telegram_worker():
                 req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
                 urllib.request.urlopen(req, timeout=15)
 
+            debug(f"📱 Telegram gesendet: {reason}")
+
         except Exception as e:
-            print(f"[Telegram] Fehler: {e}")
+            debug(f"📱 Telegram-Fehler: {e}")
             time.sleep(5)
 
 
@@ -559,6 +564,12 @@ def audio_thread():
             noise_needed = int(fresh_cfg["noise_duration"] * fresh_cfg["audio_rate"] / 1024)
             is_crying = cry_counter >= cry_needed
             is_noise = noise_counter >= noise_needed
+
+            # Debug: Audio-Trigger loggen
+            if is_crying and not state.get("cry_detected"):
+                debug(f"🔊 SCHREIEN erkannt! (RMS={rms:.4f}, Freq={freq:.0f}Hz, Count={cry_counter}/{cry_needed})")
+            if is_noise and not state.get("noise_detected"):
+                debug(f"📢 GERÄUSCH erkannt! (RMS={rms:.4f}, Count={noise_counter}/{noise_needed})")
 
             with lock:
                 now_ts = time.time()
