@@ -27,5 +27,7 @@
   "night_brightness_threshold": 40,
   "telegram_bot_token": "",
   "telegram_chat_id": "",
-  "telegram_enabled": false
+  "telegram_enabled": false,
+  "video_enabled": true,
+  "audio_enabled": true
 }

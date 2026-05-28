@@ -246,6 +246,10 @@
           <div class="toggle on" id="toggle-noise" onclick="document.getElementById('toggle-noise').classList.toggle('on')"></div>
           <span>Allgemeine Geräusche erkennen (nicht nur Schreien)</span>
         </div>
+        <div class="cfg-toggle">
+          <div class="toggle on" id="toggle-audio-enabled" onclick="toggleAudioEnabled()"></div>
+          <span>🎤 Live-Audio-Stream + Pegelanzeige</span>
+        </div>
         <div class="cfg-row">
           <label>Motion-Alert Cooldown <span id="val-alert_cooldown_motion">30</span>s</label>
           <input type="range" min="5" max="300" step="5" value="30" id="cfg-alert_cooldown_motion"
@@ -321,6 +325,10 @@
 
       <div class="tab-content" id="tab-camera">
         <h3 style="font-size:0.8rem;margin-bottom:8px;color:#94a3b8;">🎛️ Bildsteuerung</h3>
+        <div class="cfg-toggle">
+          <div class="toggle on" id="toggle-video-enabled" onclick="toggleVideoEnabled()"></div>
+          <span>📹 Live-Video-Stream</span>
+        </div>
         <div class="cfg-toggle">
           <div class="toggle on" id="toggle-camera-auto" onclick="toggleCameraAuto()"></div>
           <span>Auto-Modus (Kamera regelt selbst)</span>
@@ -418,6 +426,16 @@
     previewCamera();  // Live anwenden
   }
 
+  function toggleVideoEnabled() {
+    document.getElementById('toggle-video-enabled').classList.toggle('on');
+    // Änderung wird mit saveConfig() persistiert
+  }
+
+  function toggleAudioEnabled() {
+    document.getElementById('toggle-audio-enabled').classList.toggle('on');
+    // Änderung wird mit saveConfig() persistiert
+  }
+
   async function resetCamera() {
     // Defaults setzen
     document.getElementById('cfg-camera_brightness').value = 128;
@@ -485,6 +503,12 @@
       document.getElementById('cfg-telegram_bot_token').value = cfg.telegram_bot_token || '';
       document.getElementById('cfg-telegram_chat_id').value = cfg.telegram_chat_id || '';
 
+      // Video/audio enabled toggles
+      const tve = document.getElementById('toggle-video-enabled');
+      if (cfg.video_enabled !== false) tve.classList.add('on'); else tve.classList.remove('on');
+      const tae = document.getElementById('toggle-audio-enabled');
+      if (cfg.audio_enabled !== false) tae.classList.add('on'); else tae.classList.remove('on');
+
       // Falls schon Chat-ID gespeichert → als verbunden anzeigen
       if (cfg.telegram_chat_id && cfg.telegram_bot_token) {
         document.getElementById('telegram-connected').style.display = 'block';
@@ -512,6 +536,8 @@
     cfg['noise_alert_enabled'] = document.getElementById('toggle-noise').classList.contains('on');
     cfg['camera_auto'] = document.getElementById('toggle-camera-auto').classList.contains('on');
     cfg['telegram_enabled'] = document.getElementById('toggle-telegram').classList.contains('on');
+    cfg['video_enabled'] = document.getElementById('toggle-video-enabled').classList.contains('on');
+    cfg['audio_enabled'] = document.getElementById('toggle-audio-enabled').classList.contains('on');
     cfg['telegram_bot_token'] = document.getElementById('cfg-telegram_bot_token').value.trim();
     const chatEl = document.getElementById('cfg-telegram_chat_id');
     if (chatEl) cfg['telegram_chat_id'] = chatEl.value.trim();  // Nur wenn Feld existiert

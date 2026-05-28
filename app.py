@@ -58,6 +58,8 @@ DEFAULT_CONFIG = {
     "telegram_bot_token": "",           # Optional: Bot-Token von @BotFather
     "telegram_chat_id": "",             # Optional: Chat-ID für Nachrichten
     "telegram_enabled": False,          # Telegram-Notifications aktiv?
+    "video_enabled": True,              # Live-Video-Stream (MJPEG)
+    "audio_enabled": True,              # Live-Audio-Stream + Pegelanzeige
 }
 
 def load_config():
@@ -349,10 +351,17 @@ def video_thread():
             state["fps_actual"] = (len(fps_times) - 1) / (fps_times[-1] - fps_times[0])
 
         # ── JPEG-kodieren ──
-        jpeg_q = 50 if night else 70  # Nacht: mehr Kompression (Rauschen)
-        _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, jpeg_q])
         with frame_lock:
-            latest_frame = jpeg.tobytes()
+            if fresh_cfg.get("video_enabled", True):
+                jpeg_q = 50 if night else 70
+                _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, jpeg_q])
+                latest_frame = jpeg.tobytes()
+            else:
+                # Video deaktiviert → schwarzes Platzhalterbild
+                if latest_frame is None:
+                    black = np.zeros((H, W, 3), dtype=np.uint8)
+                    _, jpeg = cv2.imencode('.jpg', black)
+                    latest_frame = jpeg.tobytes()
             latest_raw_frame = raw  # für Snapshots ohne Overlay
 
         elapsed = time.time() - t0
@@ -481,9 +490,10 @@ def audio_thread():
             if len(data) < chunk_size:
                 continue
 
-            # Audio-Buffer für Live-Stream
-            with audio_buffer_lock:
-                audio_buffer.append(data)
+            # Audio-Buffer für Live-Stream (nur wenn aktiviert)
+            if fresh_cfg.get("audio_enabled", True):
+                with audio_buffer_lock:
+                    audio_buffer.append(data)
             samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
             rms = np.sqrt(np.mean(samples**2)) / 32768.0
 
