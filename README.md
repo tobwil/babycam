@@ -1,6 +1,6 @@
 # 🍼 BabyCam
 
-**Offline Baby-Monitor für Raspberry Pi** — Bewegungserkennung, Schrei-/Geräuscherkennung, Live-Video & Audio, Telegram-Alarme. 
+**Offline Baby-Monitor für Raspberry Pi** — Bewegungserkennung, Schrei-/Geräuscherkennung, Live-Video & Audio, Telegram-Alarme.
 Alles lokal, keine Cloud, kein Abo.
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
@@ -21,6 +21,7 @@ Alles lokal, keine Cloud, kein Abo.
 - 🔔 **Audio-Alarm** im Browser bei Ereignissen
 - 🐳 **Docker-Support** für ARM64 (Raspberry Pi 4B / Pi Zero 2 W)
 - 💾 **Persistente Konfiguration** in `config.json`
+- 🏠 **Home Assistant Integration** — MQTT Sensoren + Kamera (Auto-Discovery)
 
 ## Hardware
 
@@ -43,7 +44,7 @@ docker build -t babycam:latest .
 docker compose up -d
 ```
 
-**Webinterface:** [http://raspberrypi:5000](http://raspberrypi:5000)
+**Webinterface:** http://raspberrypi:5000
 
 In `docker-compose.yml` sind Kamera (`/dev/video0`) und Sound (`/dev/snd`) bereits gemountet.
 
@@ -64,7 +65,7 @@ sudo apt install -y python3 python3-pip python3-venv \
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install opencv-python-headless flask numpy
+pip install opencv-python-headless flask numpy paho-mqtt
 ```
 
 ### 3. Kamera & Mikrofon prüfen
@@ -73,7 +74,7 @@ pip install opencv-python-headless flask numpy
 # Verfügbare Kameras
 ls /dev/video*
 
-# Verfügbare Mikrofone  
+# Verfügbare Mikrofone
 arecord -l
 
 # Mikrofon-Test:
@@ -87,7 +88,7 @@ aplay test.wav
 python app.py
 ```
 
-Öffne [http://localhost:5000](http://localhost:5000) im Browser.
+Öffne http://localhost:5000 im Browser.
 
 ## Konfiguration
 
@@ -129,6 +130,105 @@ Herausfinden mit: `arecord -l`
 
 Siehe [PI-ZERO-SETUP.md](PI-ZERO-SETUP.md) für eine detaillierte Anleitung zur Einrichtung auf dem Pi Zero 2 W.
 
+## Home Assistant Integration
+
+BabyCam kann per MQTT und als Kamera in Home Assistant eingebunden werden.
+Alle Sensoren erscheinen automatisch via MQTT Auto-Discovery — keine manuelle
+YAML-Konfiguration nötig.
+
+### Voraussetzungen
+
+- **MQTT-Broker** (z.B. Mosquitto) in HA eingerichtet
+- BabyCam im selben Netzwerk wie der MQTT-Broker
+- `MQTT_BROKER` und `MQTT_PORT` in `docker-compose.yml` gesetzt
+
+### Sensoren (automatisch via MQTT Discovery)
+
+| Sensor | Typ | Beschreibung |
+|--------|-----|-------------|
+| `binary_sensor.babycam_babycam_bewegung` | Motion | Bewegungserkennung (Frame-Differencing) |
+| `binary_sensor.babycam_babycam_schreien` | Sound | Schreierkennung (300–800 Hz) |
+| `binary_sensor.babycam_babycam_gerausch` | Sound | Allgemeine Geräuscherkennung |
+| `binary_sensor.babycam_babycam_nachtmodus` | Light | Automatische Nachterkennung |
+| `sensor.babycam_babycam_lautstarke` | RMS | Aktueller Lautstärkepegel |
+| `sensor.babycam_babycam_helligkeit` | px | Durchschnittliche Bildhelligkeit |
+
+Alle Sensoren aktualisieren in Echtzeit — kein Polling, kein Delay.
+
+### Kamera in HA einrichten
+
+Die Generic Camera wird in HA 2025+ ausschließlich per UI eingerichtet.
+
+1. **Einstellungen → Geräte & Dienste → Integration hinzufügen → Generic Camera**
+2. **Still Image URL:** `http://<babycam-ip>:5000/api/still`
+3. **Stream Source:** *leer lassen* (MJPEG wird nicht via go2rtc gestreamt)
+4. **Advanced:** Framerate 5, Verify SSL aus
+5. Kamera-Entity unter Einstellungen → Geräte zu „BabyCam" umbenennen
+
+Alternativ per REST-API:
+
+```bash
+FLOW=$(curl -s -X POST -H "Authorization: Bearer $HA_TOKEN" \
+  "$HA_URL/api/config/config_entries/flow" \
+  -d '{"handler":"generic"}' | jq -r '.flow_id')
+
+curl -s -X POST -H "Authorization: Bearer $HA_TOKEN" \
+  "$HA_URL/api/config/config_entries/flow/$FLOW" \
+  -d '{"still_image_url":"http://192.168.178.131:5000/api/still",
+       "advanced":{"framerate":5,"verify_ssl":false}}'
+
+curl -s -X POST -H "Authorization: Bearer $HA_TOKEN" \
+  "$HA_URL/api/config/config_entries/flow/$FLOW" \
+  -d '{"confirmed_ok":true}'
+```
+
+### MQTT-Konfiguration (docker-compose.yml)
+
+```yaml
+environment:
+  - MQTT_BROKER=192.168.178.131
+  - MQTT_PORT=1883
+```
+
+### Live-Stream im HA-Dashboard
+
+Die Kamera-Karte zeigt ein Standbild, das alle paar Sekunden aktualisiert wird.
+Für einen echten Livestream:
+
+- **Webseiten-Karte** mit URL `http://<babycam-ip>:5000` → komplettes BabyCam-UI
+- **Picture-Entity-Karte** mit `camera_view: live` → MJPEG direkt im Browser
+
+### Automatisierungs-Beispiele
+
+```yaml
+# Bei Schrei: Benachrichtigung senden
+automation:
+  - trigger:
+      - platform: state
+        entity_id: binary_sensor.babycam_babycam_schreien
+        to: "on"
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "🚼 BabyCam"
+          message: "Baby ist wach!"
+
+# Bei Bewegung in der Nacht: Nachtlicht einschalten
+automation:
+  - trigger:
+      - platform: state
+        entity_id: binary_sensor.babycam_babycam_bewegung
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.babycam_babycam_nachtmodus
+        state: "on"
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: light.nachtlicht
+```
+
 ## Docker Export / Backup
 
 ```bash
@@ -149,7 +249,7 @@ tar -czf babycam-backup.tar.gz \
 
 ```
 babycam/
-├── app.py                  # Hauptanwendung (Flask + OpenCV)
+├── app.py                  # Hauptanwendung (Flask + OpenCV + MQTT)
 ├── templates/
 │   └── dashboard.html      # Web-Dashboard
 ├── Dockerfile              # Docker-Image
@@ -165,10 +265,28 @@ babycam/
 - **Python 3.13** mit Flask (Webserver)
 - **OpenCV** für Video-Capture und Motion Detection (Frame-Differencing)
 - **NumPy** für Audio-Analyse (RMS, Zero-Crossing Frequenzerkennung)
+- **paho-mqtt** für Home Assistant Integration (MQTT)
 - **ALSA** (`arecord`) für Mikrofon-Aufnahme
 - **v4l2-ctl** für Kamera-Steuerung
 - **Web Audio API** für Browser-Audio-Playback
 - **Telegram Bot API** für Benachrichtigungen
+
+## API-Endpunkte
+
+| Endpoint | Methode | Beschreibung |
+|----------|---------|-------------|
+| `/` | GET | Web-Dashboard |
+| `/video_feed` | GET | MJPEG Live-Video-Stream |
+| `/api/still` | GET | Einzelnes JPEG-Standbild (für HA) |
+| `/api/status` | GET | Alle Sensor-Daten als JSON |
+| `/api/config` | GET/POST | Konfiguration lesen/schreiben |
+| `/api/history` | GET | Bewegungs- und Sound-Historie |
+| `/api/snapshots` | GET | Liste aller Snapshots |
+| `/api/snapshot/<file>` | GET | Einzelnes Snapshot-Bild |
+| `/api/audio/latest` | GET | Live-Audio als WAV |
+| `/api/camera/preview` | POST | Kamera-Einstellungen live setzen |
+| `/api/telegram/test` | POST | Telegram-Verbindung testen |
+| `/api/telegram/discover` | POST | Chat-ID automatisch erkennen |
 
 ## Lizenz
 

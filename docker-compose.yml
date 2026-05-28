@@ -12,6 +12,10 @@ services:
       - ./config.json:/app/config.json  # Config persistent
     environment:
       - TZ=Europe/Berlin
+      - MQTT_BROKER=192.168.178.131
+      - MQTT_PORT=1883
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     group_add:
       - "29"   # audio
       - "44"   # video

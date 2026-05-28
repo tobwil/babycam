@@ -14,9 +14,11 @@ import json
 import os
 import urllib.request
 import urllib.parse
+import socket
 from collections import deque
 from datetime import datetime
 from flask import Flask, Response, render_template, jsonify, request, send_file
+import paho.mqtt.client as mqtt
 
 app = Flask(__name__)
 
@@ -75,6 +77,120 @@ def save_config(cfg):
         json.dump(cfg, f, indent=2)
 
 config = load_config()
+
+# ── MQTT-Integration (Home Assistant) ────────────────────────────
+MQTT_BROKER = os.environ.get("MQTT_BROKER", "host.docker.internal")
+MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
+MQTT_CLIENT_ID = f"babycam_{socket.gethostname()}"
+
+mqtt_client = mqtt.Client(client_id=MQTT_CLIENT_ID, protocol=mqtt.MQTTv5)
+mqtt_connected = False
+
+# MQTT Topics
+TOPIC_MOTION = "babycam/motion"
+TOPIC_CRY = "babycam/cry"
+TOPIC_NOISE = "babycam/noise"
+TOPIC_SOUND = "babycam/sound_level"
+TOPIC_NIGHT = "babycam/night_mode"
+TOPIC_BRIGHTNESS = "babycam/brightness"
+
+# MQTT-Status-Tracking (nur bei Änderung publishen)
+_mqtt_last_state = {
+    "motion": None,
+    "cry": None,
+    "noise": None,
+    "night_mode": None,
+}
+
+def _mqtt_publish(topic, payload, retain=False):
+    """Publish an MQTT topic, silently ignoring connection errors."""
+    try:
+        if mqtt_connected:
+            mqtt_client.publish(topic, payload, retain=retain)
+    except Exception:
+        pass
+
+def _mqtt_publish_if_changed(topic, value, key):
+    """Publish only if value changed from last published state."""
+    if _mqtt_last_state.get(key) != value:
+        _mqtt_last_state[key] = value
+        _mqtt_publish(topic, "ON" if value else "OFF")
+
+def _mqtt_send_discovery():
+    """Send HA MQTT Auto-Discovery configs (retained)."""
+    device = {
+        "identifiers": ["babycam_pi"],
+        "name": "BabyCam",
+        "manufacturer": "Hermes",
+        "model": "Pi USB Webcam Monitor",
+    }
+
+    # Binary sensors
+    for entity, name, device_class in [
+        ("motion", "Bewegung", "motion"),
+        ("cry", "Schreien", "sound"),
+        ("noise", "Geräusch", "sound"),
+    ]:
+        config = {
+            "name": name,
+            "device_class": device_class,
+            "state_topic": f"babycam/{entity}",
+            "unique_id": f"babycam_{entity}",
+            "device": device,
+        }
+        _mqtt_publish(f"homeassistant/binary_sensor/babycam_{entity}/config",
+                      json.dumps(config), retain=True)
+
+    # Night mode binary sensor
+    _mqtt_publish("homeassistant/binary_sensor/babycam_night/config",
+                  json.dumps({
+                      "name": "Nachtmodus",
+                      "device_class": "light",
+                      "state_topic": TOPIC_NIGHT,
+                      "unique_id": "babycam_night",
+                      "device": device,
+                  }), retain=True)
+
+    # Sound level sensor
+    _mqtt_publish("homeassistant/sensor/babycam_sound/config",
+                  json.dumps({
+                      "name": "Lautstärke",
+                      "state_topic": TOPIC_SOUND,
+                      "unit_of_measurement": "RMS",
+                      "unique_id": "babycam_sound",
+                      "device": device,
+                      "expire_after": 10,
+                  }), retain=True)
+
+    # Brightness sensor
+    _mqtt_publish("homeassistant/sensor/babycam_brightness/config",
+                  json.dumps({
+                      "name": "Helligkeit",
+                      "state_topic": TOPIC_BRIGHTNESS,
+                      "unit_of_measurement": "px",
+                      "unique_id": "babycam_brightness",
+                      "device": device,
+                      "expire_after": 30,
+                  }), retain=True)
+
+def on_mqtt_connect(client, userdata, flags, reason_code, properties):
+    global mqtt_connected
+    mqtt_connected = True
+    print(f"[MQTT] Verbunden mit {MQTT_BROKER}:{MQTT_PORT} (rc={reason_code})")
+    _mqtt_send_discovery()
+    # Reset tracking so current state gets published on next cycle
+    for k in _mqtt_last_state:
+        _mqtt_last_state[k] = None
+
+def on_mqtt_disconnect(client, userdata, flags, reason_code, properties):
+    global mqtt_connected
+    mqtt_connected = False
+    print(f"[MQTT] Getrennt (rc={reason_code}), reconnect...")
+
+mqtt_client.on_connect = on_mqtt_connect
+mqtt_client.on_disconnect = on_mqtt_disconnect
+mqtt_client.connect_async(MQTT_BROKER, MQTT_PORT, keepalive=60)
+mqtt_client.loop_start()
 
 # ── Globaler Zustand (Thread-safe) ─────────────────────────────
 lock = threading.Lock()
@@ -175,6 +291,8 @@ def video_thread():
         with lock:
             state["brightness"] = round(brightness, 1)
             state["night_mode"] = night
+            _mqtt_publish_if_changed(TOPIC_NIGHT, night, "night_mode")
+            _mqtt_publish(TOPIC_BRIGHTNESS, str(round(brightness, 1)))
 
         # ── Motion Detection ──
         if prev_gray is not None:
@@ -195,6 +313,7 @@ def video_thread():
                 was_motion = state["motion"]
                 now_ts = time.time()
                 state["motion"] = motion_now
+                _mqtt_publish_if_changed(TOPIC_MOTION, motion_now, "motion")
 
                 if motion_now:
                     # Bewegung begann gerade erst → Startzeit merken
@@ -397,6 +516,9 @@ def audio_thread():
                 state["sound_level"] = round(float(rms), 4)
                 state["cry_detected"] = is_crying
                 state["noise_detected"] = is_noise
+                _mqtt_publish(TOPIC_SOUND, str(round(float(rms), 4)))
+                _mqtt_publish_if_changed(TOPIC_CRY, is_crying, "cry")
+                _mqtt_publish_if_changed(TOPIC_NOISE, is_noise, "noise")
                 state["sound_history"].append({
                     "t": time.time(), "rms": round(float(rms), 4),
                     "freq": round(float(freq), 1), "cry": is_crying, "noise": is_noise,
@@ -441,6 +563,15 @@ def video_feed():
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
             time.sleep(1 / config["fps"])
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/api/still')
+def api_still():
+    """Einzelnes JPEG-Standbild für HA Generic Camera."""
+    with frame_lock:
+        if latest_frame is None:
+            return "", 204
+        frame = latest_frame
+    return Response(frame, mimetype='image/jpeg')
 
 @app.route('/api/status')
 def api_status():

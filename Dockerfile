@@ -21,7 +21,7 @@ WORKDIR /app
 
 # piwheels für schnelle ARM-Installation
 RUN pip install --no-cache-dir --extra-index-url https://www.piwheels.org/simple \
-    opencv-python-headless flask numpy
+    opencv-python-headless flask numpy paho-mqtt
 
 COPY app.py .
 COPY templates/ templates/
