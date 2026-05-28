@@ -591,10 +591,15 @@
     cfg['telegram_enabled'] = document.getElementById('toggle-telegram').classList.contains('on');
     cfg['video_enabled'] = document.getElementById('toggle-video-enabled').classList.contains('on');
     cfg['audio_enabled'] = document.getElementById('toggle-audio-enabled').classList.contains('on');
+    // FPS explizit sammeln (Fallback falls querySelectorAll nicht greift)
+    const fpsEl = document.getElementById('cfg-fps');
+    if (fpsEl) cfg['fps'] = parseFloat(fpsEl.value);
+    
     cfg['audio_device'] = document.getElementById('cfg-audio_device').value.trim();
     cfg['telegram_bot_token'] = document.getElementById('cfg-telegram_bot_token').value.trim();
     const chatEl = document.getElementById('cfg-telegram_chat_id');
     if (chatEl) cfg['telegram_chat_id'] = chatEl.value.trim();  // Nur wenn Feld existiert
+    console.log('💾 saveConfig:', JSON.stringify(cfg));
     try {
       await fetch('/api/config', {
         method: 'POST',

@@ -628,6 +628,15 @@ def audio_thread():
 
 # ── Flask-Routen ────────────────────────────────────────────────
 
+
+# ── Cache-Control (verhindert alte JS/HTML im Browser) ──────────
+@app.after_request
+def add_no_cache(response):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 @app.route('/')
 def index():
     return render_template('dashboard.html')
