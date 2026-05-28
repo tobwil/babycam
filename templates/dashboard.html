@@ -227,63 +227,74 @@
       </div>
 
       <div class="tab-content" id="tab-config">
+        <p style="font-size:0.65rem;color:#64748b;margin-bottom:10px;">⚙️ Alle Erkennungs- und Alarm-Einstellungen für Bewegung, Geräusche und Nachtsicht.</p>
         <div class="cfg-row">
-          <label>Bewegungs-Empfindlichkeit <span id="val-motion_threshold">12</span></label>
+          <label>🔍 Bewegungs-Empfindlichkeit <span id="val-motion_threshold">12</span></label>
           <input type="range" min="2" max="50" value="12" id="cfg-motion_threshold"
                  oninput="updateRange('motion_threshold')">
+          <span style="font-size:0.55rem;color:#64748b;">Niedrig = reagiert nur auf deutliche Bewegungen | Hoch = reagiert auf kleinste Änderungen</span>
         </div>
         <div class="cfg-row">
-          <label>Min. Bewegungsfläche <span id="val-motion_min_area">800</span> px²</label>
+          <label>📐 Kleinste erkannte Bewegung <span id="val-motion_min_area">800</span> px</label>
           <input type="range" min="100" max="5000" step="50" value="800" id="cfg-motion_min_area"
                  oninput="updateRange('motion_min_area')">
+          <span style="font-size:0.55rem;color:#64748b;">100 = schon winzige Bewegungen melden | 5000 = nur große Bewegungen</span>
         </div>
         <div class="cfg-row">
-          <label>Geräusch-Schwelle <span id="val-sound_threshold">0.04</span> RMS</label>
+          <label>🔊 Lautstärke-Schwelle <span id="val-sound_threshold">0.04</span></label>
           <input type="range" min="0.01" max="0.50" step="0.01" value="0.04" id="cfg-sound_threshold"
                  oninput="updateRange('sound_threshold')">
+          <span style="font-size:0.55rem;color:#64748b;">0.01 = Flüstern reicht | 0.50 = nur lautes Schreien</span>
         </div>
         <div class="cfg-toggle">
           <div class="toggle on" id="toggle-noise" onclick="document.getElementById('toggle-noise').classList.toggle('on')"></div>
-          <span>Allgemeine Geräusche erkennen (nicht nur Schreien)</span>
+          <span>📢 Auch auf andere Geräusche alarmieren (nicht nur Schreien)</span>
         </div>
         <div class="cfg-toggle">
           <div class="toggle on" id="toggle-audio-enabled" onclick="toggleAudioEnabled()"></div>
-          <span>🎤 Live-Audio-Stream + Pegelanzeige</span>
+          <span>🎤 Live-Audio & Pegel an Browser senden</span>
+          <p style="font-size:0.55rem;color:#64748b;margin:2px 0 0 0;">Ausschalten spart CPU & Netzwerk. Alarmierung läuft trotzdem.</p>
         </div>
         <div class="cfg-row">
-          <label>Audio-Gerät</label>
+          <label>🎛️ Audio-Gerät</label>
           <input type="text" id="cfg-audio_device" value="plughw:3,0"
                  style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 8px;font-size:0.75rem;">
-          <span style="font-size:0.55rem;color:#64748b;">z.B. plughw:1,0 — mit arecord -l finden</span>
+          <span style="font-size:0.55rem;color:#64748b;">Mit <code>arecord -l</code> im Terminal herausfinden (z.B. plughw:1,0)</span>
         </div>
         <div class="cfg-row">
-          <label>Audio-Rate <span id="val-audio_rate">16000</span>Hz</label>
+          <label>🎵 Audio-Qualität <span id="val-audio_rate">16000</span>Hz</label>
           <input type="range" min="8000" max="48000" step="8000" value="16000" id="cfg-audio_rate"
                  oninput="updateRange('audio_rate')">
+          <span style="font-size:0.55rem;color:#64748b;">8000 = sparsam (Pi Zero) | 48000 = beste Qualität</span>
         </div>
         <div class="cfg-row">
-          <label>Motion-Alert Cooldown <span id="val-alert_cooldown_motion">30</span>s</label>
+          <label>⏱️ Pause zwischen Bewegungs-Alarmen <span id="val-alert_cooldown_motion">30</span>s</label>
           <input type="range" min="5" max="300" step="5" value="30" id="cfg-alert_cooldown_motion"
                  oninput="updateRange('alert_cooldown_motion')">
+          <span style="font-size:0.55rem;color:#64748b;">Erneuter Alarm frühestens nach dieser Zeit</span>
         </div>
         <div class="cfg-row">
-          <label>Mindest-Bewegungsdauer <span id="val-motion_duration_min">8</span>s</label>
+          <label>🕐 Bewegung melden nach <span id="val-motion_duration_min">8</span>s</label>
           <input type="range" min="1" max="30" step="1" value="8" id="cfg-motion_duration_min"
                  oninput="updateRange('motion_duration_min')">
+          <span style="font-size:0.55rem;color:#64748b;">Verhindert Fehlalarme durch kurzes Vorbeilaufen</span>
         </div>
         <div class="cfg-row">
-          <label>Schrei-Alert Cooldown <span id="val-alert_cooldown_cry">60</span>s</label>
+          <label>⏱️ Pause zwischen Schrei-Alarmen <span id="val-alert_cooldown_cry">60</span>s</label>
           <input type="range" min="10" max="600" step="10" value="60" id="cfg-alert_cooldown_cry"
                  oninput="updateRange('alert_cooldown_cry')">
+          <span style="font-size:0.55rem;color:#64748b;">Erneuter Schrei-Alarm frühestens nach dieser Zeit</span>
         </div>
         <div class="cfg-toggle">
           <div class="toggle on" id="toggle-night" onclick="toggleNight()"></div>
-          <span>Nachtmodus (auto)</span>
+          <span>🌙 Automatischer Nachtmodus</span>
+          <p style="font-size:0.55rem;color:#64748b;margin:2px 0 0 0;">Schaltet bei Dunkelheit auf kontrastreicheres Bild um</p>
         </div>
         <div class="cfg-row">
-          <label>Nacht-Helligkeitsschwelle <span id="val-night_brightness_threshold">40</span></label>
+          <label>🌑 Dunkelheits-Schwelle <span id="val-night_brightness_threshold">40</span></label>
           <input type="range" min="10" max="100" value="40" id="cfg-night_brightness_threshold"
                  oninput="updateRange('night_brightness_threshold')">
+          <span style="font-size:0.55rem;color:#64748b;">Je niedriger, desto dunkler muss es für Nachtmodus sein</span>
         </div>
 
         <h3 style="font-size:0.8rem;margin-top:14px;margin-bottom:4px;color:#94a3b8;">📱 Telegram (optional)</h3>
@@ -335,43 +346,50 @@
       </div>
 
       <div class="tab-content" id="tab-camera">
-        <h3 style="font-size:0.8rem;margin-bottom:8px;color:#94a3b8;">🎛️ Bildsteuerung</h3>
+        <p style="font-size:0.65rem;color:#64748b;margin-bottom:10px;">📷 Video-Stream, Helligkeit und Bildqualität der Kamera.</p>
         <div class="cfg-toggle">
           <div class="toggle on" id="toggle-video-enabled" onclick="toggleVideoEnabled()"></div>
-          <span>📹 Live-Video-Stream</span>
+          <span>📹 Live-Video an Browser senden</span>
+          <p style="font-size:0.55rem;color:#64748b;margin:2px 0 0 0;">Ausschalten spart CPU. Bewegungserkennung & Snapshots laufen trotzdem.</p>
         </div>
         <div class="cfg-toggle">
           <div class="toggle on" id="toggle-camera-auto" onclick="toggleCameraAuto()"></div>
-          <span>Auto-Modus (Kamera regelt selbst)</span>
+          <span>🤖 Kamera-Automatik (Helligkeit & Belichtung)</span>
+          <p style="font-size:0.55rem;color:#64748b;margin:2px 0 0 0;">Aus = Manuelle Steuerung mit den Reglern unten</p>
         </div>
         <div id="camera-manual" style="display:none;">
           <div class="cfg-row">
-            <label>Helligkeit <span id="val-camera_brightness">128</span></label>
+            <label>☀️ Helligkeit <span id="val-camera_brightness">128</span></label>
             <input type="range" min="0" max="255" value="128" id="cfg-camera_brightness"
                    oninput="updateRange('camera_brightness')">
+            <span style="font-size:0.55rem;color:#64748b;">0 = dunkel | 128 = normal | 255 = sehr hell</span>
           </div>
           <div class="cfg-row">
-            <label>Kontrast <span id="val-camera_contrast">128</span></label>
+            <label>🌓 Kontrast <span id="val-camera_contrast">128</span></label>
             <input type="range" min="0" max="255" value="128" id="cfg-camera_contrast"
                    oninput="updateRange('camera_contrast')">
+            <span style="font-size:0.55rem;color:#64748b;">Höher = stärkere Unterschiede zwischen hell und dunkel</span>
           </div>
           <div class="cfg-row">
-            <label>Sättigung <span id="val-camera_saturation">128</span></label>
+            <label>🎨 Farbsättigung <span id="val-camera_saturation">128</span></label>
             <input type="range" min="0" max="255" value="128" id="cfg-camera_saturation"
                    oninput="updateRange('camera_saturation')">
+            <span style="font-size:0.55rem;color:#64748b;">0 = schwarz-weiß | 128 = normal | 255 = knallig</span>
           </div>
           <div class="cfg-row">
-            <label>Schärfe <span id="val-camera_sharpness">128</span></label>
+            <label>🔪 Schärfe <span id="val-camera_sharpness">128</span></label>
             <input type="range" min="0" max="255" value="128" id="cfg-camera_sharpness"
                    oninput="updateRange('camera_sharpness')">
+            <span style="font-size:0.55rem;color:#64748b;">0 = weichgezeichnet | 255 = sehr scharf (kann rauschen)</span>
           </div>
           <div class="cfg-row">
-            <label>Gain <span id="val-camera_gain">0</span></label>
+            <label>📶 Verstärkung (Gain) <span id="val-camera_gain">0</span></label>
             <input type="range" min="0" max="100" value="0" id="cfg-camera_gain"
                    oninput="updateRange('camera_gain')">
+            <span style="font-size:0.55rem;color:#64748b;">Helleres Bild bei Dunkelheit, aber mehr Bildrauschen</span>
           </div>
-          <div style="font-size:0.65rem;color:#64748b;margin-top:4px;">
-            💡 Tipp: Nachts Auto-Modus AUS → Helligkeit & Gain hoch für bessere Sicht.
+          <div style="font-size:0.65rem;color:#94a3b8;margin-top:4px;background:#0f172a;padding:8px;border-radius:6px;">
+            💡 <b>Tipp für Nachtaufnahmen:</b> Automatik aus → Gain auf 80–100 → Helligkeit auf 180–220
           </div>
         </div>
         <div class="btn-row">
