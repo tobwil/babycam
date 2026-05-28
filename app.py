@@ -699,6 +699,9 @@ def api_debug():
         "sound_threshold": cfg.get("sound_threshold"),
         "sound_level": float(state["sound_level"]),
         "cry_detected": state["cry_detected"],
+        "mqtt_connected": mqtt_connected,
+        "mqtt_broker": MQTT_BROKER,
+        "client_id": MQTT_CLIENT_ID,
     }
     return jsonify({"info": info, "log": log})
 
