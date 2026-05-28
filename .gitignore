@@ -1,8 +1,6 @@
-# Config mit sensiblen Daten (Token, Chat-ID)
-config.json
-
-# Snapshots (können viele werden)
-snapshots/
+# Python
+__pycache__/
+*.pyc
 
 # Docker Volume
 babycam_data/
