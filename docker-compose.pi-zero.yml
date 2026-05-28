@@ -1,3 +1,10 @@
+# Docker Compose für Pi Zero 2 W
+# Verwendung:  docker compose -f docker-compose.pi-zero.yml up -d
+#
+# WICHTIG: Die C930e bekommt nicht immer /dev/video0.
+# Prüfe mit:  v4l2-ctl --list-devices | grep -A2 C930e
+# Passe die devices:-Zeile entsprechend an (z.B. /dev/video1:/dev/video0).
+
 services:
   babycam:
     image: babycam:latest
@@ -6,7 +13,7 @@ services:
     ports:
       - "5000:5000"
     devices:
-      - /dev/video0:/dev/video0
+      - /dev/video1:/dev/video0   # ← ggf. anpassen (v4l2-ctl --list-devices)
       - /dev/snd:/dev/snd
     volumes:
       - babycam_data:/app/snapshots
