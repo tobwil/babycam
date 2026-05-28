@@ -469,37 +469,16 @@ def audio_thread():
     )
     cry_counter = 0
     noise_counter = 0
-    chunk_size = 1024 * 2
+    chunk_size = 4096  # Größere Chunks = weniger CPU-Last
     last_mqtt_sound = 0  # Throttle MQTT sound publish
-
-    # Non-blocking I/O für schnelles Pipe-Draining
-    import fcntl, os as _os
-    fd = proc.stdout.fileno()
-    fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-    fcntl.fcntl(fd, fcntl.F_SETFL, fl | _os.O_NONBLOCK)
 
     while True:
         try:
             fresh_cfg = load_config()
             
-            # ── Pipe drain: alle verfügbaren Chunks lesen, nur letzten behalten ──
-            data = None
-            drained = 0
-            while True:
-                try:
-                    chunk = proc.stdout.read(chunk_size)
-                    if chunk and len(chunk) >= chunk_size:
-                        data = chunk
-                        drained += 1
-                    else:
-                        break
-                except BlockingIOError:
-                    break
-            if drained > 3:
-                pass  # Mehr als 3 Chunks gestaut → Pi Zero Modus, OK
-            
-            if data is None:
-                time.sleep(0.05)
+            # Blocking read — aber mit größerem Chunk
+            data = proc.stdout.read(chunk_size)
+            if len(data) < chunk_size:
                 continue
 
             # Audio-Buffer für Live-Stream
