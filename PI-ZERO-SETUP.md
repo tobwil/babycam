@@ -5,40 +5,41 @@
 
 ## Hardware
 
-- Raspberry Pi Zero 2 W (oder Pi 4B/3B)
-- USB-Webcam mit Mikrofon (getestet: Logitech C930e)
+- **Raspberry Pi Zero 2 W** (ARM64/aarch64)
+- **USB-Webcam mit Mikrofon** (getestet: Logitech C930e)
 - microSD-Karte (≥ 8 GB)
 - 5V-Netzteil
 
 ## Schritt 1: Raspberry Pi OS installieren
 
 1. **Raspberry Pi Imager** herunterladen: https://www.raspberrypi.com/software/
-2. Betriebssystem: **Raspberry Pi OS Lite (64-bit)** – headless, kein Desktop
+2. Betriebssystem: **Raspberry Pi OS Lite (64-bit)** — headless, kein Desktop
 3. In den Imager-Einstellungen (⚙️):
-   - Hostname: `babycam-zero` (oder `babycam`)
+   - Hostname: `pi-zero` (oder `babycam-zero`)
    - SSH aktivieren
    - Benutzer & Passwort setzen
    - WLAN konfigurieren (falls kein Ethernet)
-4. SD-Karte schreiben, in den Pi Zero stecken, booten
+4. SD-Karte schreiben, in den Zero stecken, booten
 
-## Schritt 2: Docker installieren
+## Schritt 2: System vorbereiten
 
 ```bash
-# SSH auf den Pi
-ssh pi@babycam-zero.local
+# SSH auf den Zero
+ssh pi@pi-zero.local
+
+# System updaten
+sudo apt update && sudo apt upgrade -y
 
 # Docker installieren
 curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker pi
-
-# Docker Compose Plugin
+sudo usermod -aG docker $USER
 sudo apt install -y docker-compose-plugin
 
 # Audio-Gruppe für Mikrofon-Zugriff
-sudo usermod -aG audio pi
+sudo usermod -aG audio $USER
 
 # Neu einloggen damit Gruppen greifen
-exit && ssh pi@babycam-zero.local
+exit && ssh pi@pi-zero.local
 ```
 
 ## Schritt 3: Webcam prüfen
@@ -50,32 +51,61 @@ ls /dev/snd             # Sound-Devices
 
 # Mikrofon finden
 arecord -l
-# → card X: C930e [Logitech Webcam C930e], device 0
+# → card 1: C930e [Logitech Webcam C930e], device 0: USB Audio [USB Audio]
+#   ↑ Am Zero ist die C930e meist Card 1 (nicht Card 3 wie am Pi 4B!)
 
 # Mikrofon-Test:
-arecord -D plughw:X,0 -f S16_LE -r 16000 -c 1 -d 2 test.wav
+arecord -D plughw:1,0 -f S16_LE -r 16000 -c 1 -d 2 test.wav
 aplay test.wav
 ```
 
-Falls das Mikrofon **nicht** Card 3 ist: nachher in `config.json` (im Web-UI) `audio_device` anpassen, z.B. `"plughw:2,0"`.
+> ⚠️ **Wichtig:** Die C930e ist am Pi Zero 2 W meist an **Card 1**, nicht Card 3! Mit `arecord -l` prüfen und in `config.json` eintragen.
 
 ## Schritt 4: BabyCam deployen
 
 ```bash
 git clone https://github.com/tobwil/babycam.git
 cd babycam
-
-# MQTT-Broker-Adresse setzen (HA-Pi IP)
-# In docker-compose.yml: MQTT_BROKER=192.168.178.131
-
-# Image bauen (2–3 Minuten)
-docker build -t babycam:latest .
-
-# Starten
-docker compose up -d
 ```
 
-**Wichtig:** Erst `docker build`, dann `docker compose up` — das Image liegt nicht auf Docker Hub.
+### config.json anpassen
+
+```bash
+nano config.json
+```
+
+Wichtige Änderungen für den Zero:
+
+```jsonc
+{
+  "audio_device": "plughw:1,0",   // Card-Nummer vom Zero (arecord -l)
+  "fps": 5,                        // Zero packt max. ~5 FPS (CPU-Limit)
+  "audio_rate": 16000,             // 16000 reicht, spart CPU vs. 48000
+  "sound_threshold": 0.01          // Etwas sensibler als Default 0.04
+}
+```
+
+### MQTT-Broker setzen
+
+In `docker-compose.pi-zero.yml` die IP deines HA-Pis eintragen:
+
+```yaml
+environment:
+  - MQTT_BROKER=192.168.178.131
+  - MQTT_PORT=1883
+```
+
+### Bauen & starten
+
+```bash
+# Image bauen (2–3 Minuten auf dem Zero)
+docker build -t babycam:latest .
+
+# Mit Zero-spezifischem Compose-File starten
+docker compose -f docker-compose.pi-zero.yml up -d
+```
+
+> ⚠️ **Unbedingt `docker-compose.pi-zero.yml` verwenden!** Das Standard-Compose-File funktioniert auf dem Zero nicht — `/dev/video0` muss als Device-Mount (nicht Volume) eingebunden werden.
 
 ## Schritt 5: Testen
 
@@ -83,35 +113,43 @@ docker compose up -d
 # Status prüfen
 docker compose logs -f
 
-# Browser öffnen
-http://babycam-zero.local:5000
+# Webinterface öffnen
+http://pi-zero.local:5000
 # Oder via IP: http://<pi-zero-ip>:5000
 ```
 
 Du solltest den Live-Videostream und den Geräuschpegel sehen. Unter ⚙️ Alarm / 📷 Kamera kannst du alles einstellen.
 
+## Performance auf dem Pi Zero 2 W
+
+Der Zero hat eine schwächere CPU als der Pi 4B. Hier die realistischen Werte:
+
+| Metrik | Wert |
+|---|---|
+| **Max. FPS** | ~5 (darüber CPU-gebunden, bringt nichts) |
+| **CPU-Auslastung** | ~50% bei 5 FPS, 640×480, 16kHz Audio |
+| **RAM** | ~120–180 MB |
+| **Build-Zeit** | ~4 Min (Docker, Erst-Build) |
+| **Startzeit** | ~10s bis Webinterface erreichbar |
+
+Der FPS-Regler im Web-UI setzt die **Ziel-FPS** — die tatsächliche FPS ist durch die CPU begrenzt:
+- **Ziel ≤ 5** → FPS passt sich an (z.B. 3 → ~3.9 FPS)
+- **Ziel > 5** → Zero läuft auf Maximum (~5 FPS), höhere Werte bringen nichts
+
 ## Home Assistant Integration
 
 ### MQTT-Sensoren (automatisch)
 
-In `docker-compose.yml` die IP deines HA-Pis eintragen:
+Nach dem Start erscheinen **automatisch** via MQTT Auto-Discovery:
 
-```yaml
-environment:
-  - MQTT_BROKER=192.168.178.131   # ← HA-Pi mit Mosquitto
-  - MQTT_PORT=1883
-```
+- `binary_sensor.babycam_bewegung` — Bewegung
+- `binary_sensor.babycam_schreien` — Schreien
+- `binary_sensor.babycam_gerausch` — Geräusch
+- `binary_sensor.babycam_nachtmodus` — Nachtmodus
+- `sensor.babycam_lautstarke` — Lautstärke (RMS)
+- `sensor.babycam_helligkeit` — Bildhelligkeit
 
-Nach dem Start (`docker compose up -d`) erscheinen automatisch in HA:
-
-- `binary_sensor.babycam_babycam_bewegung` — Bewegung
-- `binary_sensor.babycam_babycam_schreien` — Schreien
-- `binary_sensor.babycam_babycam_gerausch` — Geräusch
-- `binary_sensor.babycam_babycam_nachtmodus` — Nachtmodus
-- `sensor.babycam_babycam_lautstarke` — Lautstärke (RMS)
-- `sensor.babycam_babycam_helligkeit` — Bildhelligkeit
-
-Keine YAML-Konfiguration nötig — MQTT Auto-Discovery.
+Keine YAML-Konfiguration nötig.
 
 ### Kamera in HA
 
@@ -123,60 +161,86 @@ Keine YAML-Konfiguration nötig — MQTT Auto-Discovery.
 
 Danach unter Einstellungen → Geräte zu „BabyCam Zero" umbenennen.
 
-## Performance auf Pi Zero 2 W
+## Konfiguration via Web-UI
 
-- CPU-Auslastung: ~40–60% (15fps, 640×480)
-- RAM: ~120–180 MB
-- Stromverbrauch: ~2–3W (inkl. Webcam)
-- Startzeit: ~10s bis Webinterface erreichbar
+Alle Einstellungen im Web-UI (⚙️ Alarm / 📷 Kamera) — Änderungen wirken sofort, 💾 Speichern persistiert.
 
-## Konfiguration
+Wichtige Zero-spezifische Einstellungen:
 
-Alle Einstellungen im **Web-UI** (⚙️ Alarm / 📷 Kamera) — kein Neustart nötig:
-
-| Einstellung | Default | Beschreibung |
+| Einstellung | Zero-Empfehlung | Beschreibung |
 |---|---|---|
-| Bewegungs-Empfindlichkeit | 12 | Je niedriger, desto empfindlicher |
-| Min. Bewegungsfläche | 800 px² | Ignoriert kleine Bewegungen |
-| Geräusch-Schwelle | 0.04 RMS | Lautstärke für Noise-Alert |
-| Schrei-Frequenz | 300–800 Hz | Frequenzbereich für Schreien |
-| Mindest-Bewegungsdauer | 8s | Snapshots erst nach anhaltender Bewegung |
-| Motion-Cooldown | 30s | Mindestabstand zwischen Alerts |
-
-Konfiguration wird in `config.json` gespeichert und überlebt Neustarts.
+| FPS | 5 | Höher bringt nichts (CPU-Limit) |
+| Audio-Qualität | 16000 Hz | Spart CPU |
+| Geräusch-Schwelle | 0.01–0.02 | Etwas sensibler (kleiner Raum) |
+| Bewegungs-Empfindlichkeit | 12 | Default passt |
 
 ## Fehlerbehebung
 
-**Kein Video:**
+### Kein Video / Kamera nicht gefunden
+
 ```bash
+# Kamera existiert?
+ls /dev/video*
+
+# Formate prüfen
 v4l2-ctl --device=/dev/video0 --list-formats
-docker compose restart
+
+# Container-Logs
+docker logs babycam 2>&1 | grep -i "video\|kamera"
+
+# Device-Mount prüfen (muss "Devices" zeigen, nicht "Binds")
+docker inspect babycam | grep -A 5 Devices
 ```
 
-**Kein Audio:**
+### Kein Audio / arecord beendet sich sofort
+
 ```bash
-arecord -l                              # Device-Nummer prüfen
-# audio_device in config.json anpassen, z.B. "plughw:2,0"
-docker compose restart
+# Mikrofon-Card finden
+arecord -l
+
+# Im Container-Log prüfen:
+docker logs babycam 2>&1 | grep -i "arecord\|audio"
+
+# Häufige Ursache: falsche Card-Nummer in config.json
+# → Web-UI: 🎛️ Audio-Gerät auf plughw:X,0 ändern
+# → Container neustarten
 ```
 
-**MQTT-Sensoren erscheinen nicht in HA:**
+### MQTT-Sensoren erscheinen nicht in HA
+
 ```bash
-# Prüfen ob MQTT verbunden ist
-docker logs babycam 2>&1 | grep MQTT
-# Sollte zeigen: [MQTT] Verbunden mit 192.168.178.131:1883
+# MQTT-Verbindung prüfen
+curl -s http://<pi-zero-ip>:5000/api/debug | python3 -m json.tool | grep mqtt
+# → "mqtt_connected": true
+
+# Erreichbarkeit testen (im Container)
+docker exec babycam python3 -c "
+import socket; s=socket.socket(); s.settimeout(3)
+s.connect(('192.168.178.131', 1883)); print('OK')
+"
+
+# Docker Compose prüfen
+docker inspect babycam | grep MQTT_BROKER
 ```
 
-**Container startet nicht:**
-```bash
-docker compose logs babycam
-# Prüfen: /dev/video0 und /dev/snd werden durchgereicht?
-```
+### Docker Build-Fehler („COPY static/ not found")
 
-**Docker Build-Fehler („COPY static/ static/ not found"):**
 ```bash
-mkdir static    # Ordner fehlt (in älteren Repo-Versionen)
+# In sehr alten Repo-Versionen fehlt der static-Ordner:
+mkdir -p static
 docker build -t babycam:latest .
+```
+
+### Container startet nicht
+
+```bash
+# Vollständige Logs
+docker logs babycam --tail 100
+
+# Häufige Ursachen:
+# - arecord: Cannot get card index → audio_device in config.json falsch
+# - /dev/video0 nicht vorhanden → ohne Kamera docker-compose.pi-one.yml verwenden
+# - Permission denied /dev/snd → Benutzer in audio-Gruppe?
 ```
 
 ## Update
@@ -185,5 +249,16 @@ docker build -t babycam:latest .
 cd ~/babycam
 git pull
 docker build -t babycam:latest .
-docker compose down && docker compose up -d
+docker compose -f docker-compose.pi-zero.yml down
+docker compose -f docker-compose.pi-zero.yml up -d
 ```
+
+Konfiguration in `config.json` bleibt durch Updates erhalten (Volume-Mount).
+
+## Multi-Instanz: Zero + Pi 4B
+
+Ein typisches Setup: Zero 2 W im Kinderzimmer (Kamera + Audio), Pi 4B als Home Assistant mit Backup-Instanz.
+
+Der Pi 4B läuft ohne Kamera (`docker-compose.pi-one.yml`) und sendet Audio-Pegel per MQTT. Fällt der Zero aus, hast du immer noch die Audio-Sensoren in HA.
+
+Siehe [README.md](README.md) für Details zum Multi-Instanz-Setup.
