@@ -385,6 +385,12 @@
   <img id="lightbox-img" src="">
 </div>
 
+<!-- Debug-Panel -->
+<div style="text-align:center;margin-top:12px;">
+  <button class="btn" onclick="showDebug()" style="font-size:0.7rem;padding:6px 12px;">🔧 Debug-Log</button>
+</div>
+<div id="debug-panel"></div>
+
 <script>
   // ── Tabs ──
   function switchTab(name) {
@@ -898,6 +904,22 @@
 
   // Escape schließt Lightbox
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  // ── Debug-Panel (unten) ──
+  async function showDebug() {
+    const r = await fetch('/api/debug');
+    const d = await r.json();
+    const info = d.info;
+    let html = '<div style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;margin-top:10px;font-size:0.7rem;max-height:300px;overflow-y:auto;">';
+    html += '<b>🔧 Debug-Info</b><br>';
+    html += `🎤 Audio: ${info.audio_device} @ ${info.audio_rate}Hz | enabled=${info.audio_enabled} | buffer=${info.audio_buffer_chunks} chunks<br>`;
+    html += `📹 Video: enabled=${info.video_enabled} | has_frame=${info.has_video_frame}<br>`;
+    html += `🔊 Pegel: ${info.sound_level.toFixed(4)} | Schwelle: ${info.sound_threshold} | Schreien: ${info.cry_detected}<br>`;
+    html += '<br><b>📋 Log:</b><br>';
+    for (const l of d.log.slice(-30)) html += l + '<br>';
+    html += '</div>';
+    document.getElementById('debug-panel').innerHTML = html;
+  }
 </script>
 </body>
 </html>

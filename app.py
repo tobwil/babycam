@@ -22,6 +22,18 @@ import paho.mqtt.client as mqtt
 
 app = Flask(__name__)
 
+# ── Debug-Log (Ringpuffer, letzte 200 Einträge) ─────────────────
+_debug_log = deque(maxlen=200)
+_debug_lock = threading.Lock()
+
+def debug(msg: str):
+    """Thread-sicheres Log — abrufbar via /api/debug"""
+    ts = datetime.now().strftime("%H:%M:%S")
+    entry = f"[{ts}] {msg}"
+    with _debug_lock:
+        _debug_log.append(entry)
+    print(entry)  # auch ins Docker-Log
+
 # ── Persistente Konfiguration ──────────────────────────────────
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), 'snapshots')
@@ -478,11 +490,26 @@ audio_buffer_lock = threading.Lock()
 
 def audio_thread():
     """Liest via arecord und analysiert Pegel + Frequenz."""
-    proc = subprocess.Popen(
-        ["arecord", "-D", config["audio_device"], "-f", "S16_LE",
-         "-r", str(config["audio_rate"]), "-c", "1", "-t", "raw"],
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
-    )
+    dev = config["audio_device"]
+    rate = config["audio_rate"]
+    debug(f"🎤 Audio-Thread startet: {dev} @ {rate}Hz")
+    
+    try:
+        proc = subprocess.Popen(
+            ["arecord", "-D", dev, "-f", "S16_LE",
+             "-r", str(rate), "-c", "1", "-t", "raw"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        # Prüfen ob arecord läuft
+        time.sleep(0.5)
+        if proc.poll() is not None:
+            err = proc.stderr.read().decode(errors='replace')[:200]
+            debug(f"❌ arecord sofort beendet: {err}")
+            return
+        debug(f"✅ arecord läuft (PID {proc.pid})")
+    except Exception as e:
+        debug(f"❌ Audio-Fehler: {e}")
+        return
     cry_counter = 0
     noise_counter = 0
     chunk_size = 4096  # Größere Chunks = weniger CPU-Last
@@ -498,7 +525,8 @@ def audio_thread():
                 continue
 
             # Audio-Buffer für Live-Stream (nur wenn aktiviert)
-            if fresh_cfg.get("audio_enabled", True):
+            audio_on = fresh_cfg.get("audio_enabled", True)
+            if audio_on:
                 with audio_buffer_lock:
                     audio_buffer.append(data)
             samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
@@ -615,6 +643,32 @@ def api_status():
             "snapshot_count": len(state["snapshots"]),
         }
     return jsonify(s)
+
+@app.route('/api/debug')
+def api_debug():
+    """Liefert Debug-Log + Live-Status für Fehlersuche."""
+    with _debug_lock:
+        log = list(_debug_log)
+    
+    # Audio-Info
+    cfg = load_config()
+    with audio_buffer_lock:
+        buf_chunks = len(audio_buffer)
+    with frame_lock:
+        has_frame = latest_frame is not None
+    
+    info = {
+        "audio_device": cfg.get("audio_device"),
+        "audio_rate": cfg.get("audio_rate"),
+        "audio_enabled": cfg.get("audio_enabled", True),
+        "audio_buffer_chunks": buf_chunks,
+        "video_enabled": cfg.get("video_enabled", True),
+        "has_video_frame": has_frame,
+        "sound_threshold": cfg.get("sound_threshold"),
+        "sound_level": float(state["sound_level"]),
+        "cry_detected": state["cry_detected"],
+    }
+    return jsonify({"info": info, "log": log})
 
 @app.route('/api/config', methods=['GET', 'POST'])
 def api_config():
