@@ -1,8 +1,8 @@
-# Docker Compose für Pi 4B (pi-one) — mit oder ohne Kamera
-# Verwendung:  docker compose -f docker-compose.pi-one.yml up -d
+# Docker Compose für Pi Zero 2 W — OHNE Kamera (nur Audio + MQTT)
+# Verwendung:  docker compose -f docker-compose.pi-zero-audio.yml up -d
 #
-# Montiert /dev/video0 und /dev/snd.
-# Falls keine Kamera angeschlossen ist, erkennt der video_thread das selbständig.
+# Wenn die Kamera am Pi 4B steckt, läuft der Zero als reine Audio-Station.
+# /dev/video0 wird nicht gemountet.
 
 services:
   babycam:
@@ -12,9 +12,8 @@ services:
     ports:
       - "5000:5000"
     devices:
-      - /dev/video0:/dev/video0
-    volumes:
       - /dev/snd:/dev/snd
+    volumes:
       - babycam_data:/app/snapshots
       - ./config.json:/app/config.json
     environment:
