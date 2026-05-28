@@ -829,6 +829,42 @@ def api_audio_devices():
     except Exception as e:
         return jsonify({"devices": [], "error": str(e)})
 
+@app.route('/api/camera/devices')
+def api_camera_devices():
+    """Liste aller echten USB-Kameras (v4l2-ctl --list-devices)."""
+    try:
+        result = subprocess.run(
+            ["v4l2-ctl", "--list-devices"], capture_output=True, text=True, timeout=5
+        )
+        devices = []
+        current_camera = None
+        for line in result.stdout.split("\n"):
+            line = line.strip()
+            if not line:
+                current_camera = None
+                continue
+            if not line.startswith("/dev/"):
+                # Kameraname — nur USB-Kameras (enthalten "usb-")
+                if "usb-" in line:
+                    import re
+                    name_match = re.search(r"^(.+?)\s*\(usb-", line)
+                    current_camera = name_match.group(1).strip() if name_match else line.split("(")[0].strip()
+                else:
+                    current_camera = None
+            elif current_camera and line.startswith("/dev/video"):
+                dev_path = line
+                dev_num = dev_path.replace("/dev/video", "")
+                devices.append({
+                    "device": dev_num,
+                    "path": dev_path,
+                    "name": current_camera,
+                    "label": f"{current_camera} ({dev_path})"
+                })
+        current = load_config().get("camera_device", 0)
+        return jsonify({"devices": devices, "current": current})
+    except Exception as e:
+        return jsonify({"devices": [], "error": str(e)})
+
 @app.route('/api/audio/latest')
 def api_audio_latest():
     """Liefert die letzten ~2s Audio als WAV-Datei für Live-Stream."""

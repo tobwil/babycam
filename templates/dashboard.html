@@ -368,6 +368,15 @@
           <p style="font-size:0.55rem;color:#64748b;margin:2px 0 0 0;">Ausschalten spart CPU. Bewegungserkennung & Snapshots laufen trotzdem.</p>
         </div>
         <div class="cfg-row">
+          <label>📷 Kamera <button onclick="loadCameraDevices()" style="background:#334155;border:1px solid #475569;color:#94a3b8;border-radius:4px;padding:1px 6px;font-size:0.6rem;cursor:pointer;margin-left:4px;">🔄 Erkennen</button></label>
+          <select id="cfg-camera_device"
+                  style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 8px;font-size:0.75rem;"
+                  onchange="document.getElementById('val-camera_device').textContent=this.selectedOptions[0].text">
+            <option value="0">⟳ Klicke „Erkennen"…</option>
+          </select>
+          <span style="font-size:0.55rem;color:#64748b;" id="val-camera_device">Nur echte USB-Kameras, keine Software-Devices</span>
+        </div>
+        <div class="cfg-row">
           <label>🎬 Bilder pro Sekunde <span id="val-fps">15</span> FPS</label>
           <input type="range" min="1" max="30" value="15" id="cfg-fps"
                  oninput="updateRange('fps')">
@@ -546,6 +555,40 @@
     }
   });
 
+  // ── Kamera-Device-Erkennung ──
+  async function loadCameraDevices() {
+    const select = document.getElementById('cfg-camera_device');
+    const valEl = document.getElementById('val-camera_device');
+    select.innerHTML = '<option value="">⏳ Suche Kameras…</option>';
+    try {
+      const r = await fetch('/api/camera/devices');
+      const data = await r.json();
+      select.innerHTML = '';
+      if (data.devices.length === 0) {
+        select.innerHTML = '<option value="0">⚠️ Keine USB-Kamera gefunden</option>';
+        valEl.textContent = 'Keine echten Kameras via v4l2-ctl';
+      } else {
+        data.devices.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.device;
+          opt.textContent = d.label;
+          if (String(d.device) === String(data.current)) opt.selected = true;
+          select.appendChild(opt);
+        });
+        valEl.textContent = data.devices.length + ' Kamera(s) gefunden';
+      }
+    } catch(e) {
+      select.innerHTML = '<option value="0">❌ Fehler bei v4l2-ctl</option>';
+      valEl.textContent = 'v4l2-ctl nicht verfügbar?';
+    }
+  }
+  // Auto-Laden beim ersten Öffnen des Kamera-Tabs
+  document.querySelector('.tab[onclick*="camera"]').addEventListener('click', function() {
+    if (document.getElementById('cfg-camera_device').options.length <= 1) {
+      loadCameraDevices();
+    }
+  });
+
   // ── Config API ──
   async function loadConfigFromServer() {
     try {
@@ -633,6 +676,7 @@
     if (fpsEl) cfg['fps'] = parseFloat(fpsEl.value);
     
     cfg['audio_device'] = document.getElementById('cfg-audio_device').value.trim();
+    cfg['camera_device'] = parseInt(document.getElementById('cfg-camera_device').value) || 0;
     cfg['telegram_bot_token'] = document.getElementById('cfg-telegram_bot_token').value.trim();
     const chatEl = document.getElementById('cfg-telegram_chat_id');
     if (chatEl) cfg['telegram_chat_id'] = chatEl.value.trim();  // Nur wenn Feld existiert
