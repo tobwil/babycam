@@ -68,23 +68,6 @@ git clone https://github.com/tobwil/babycam.git
 cd babycam
 ```
 
-### config.json anpassen
-
-```bash
-nano config.json
-```
-
-Wichtige Änderungen für den Zero:
-
-```jsonc
-{
-  "audio_device": "plughw:1,0",   // Card-Nummer vom Zero (arecord -l)
-  "fps": 5,                        // Zero packt max. ~5 FPS (CPU-Limit)
-  "audio_rate": 16000,             // 16000 reicht, spart CPU vs. 48000
-  "sound_threshold": 0.01          // Etwas sensibler als Default 0.04
-}
-```
-
 ### MQTT-Broker setzen
 
 In `docker-compose.pi-zero.yml` die IP deines HA-Pis eintragen:
@@ -104,6 +87,14 @@ docker build -t babycam:latest .
 # Mit Zero-spezifischem Compose-File starten
 docker compose -f docker-compose.pi-zero.yml up -d
 ```
+
+### Geräte konfigurieren
+
+Nach dem Start im Web-UI (`http://<pi-zero-ip>:5000`):
+
+- **🎛️ Geräte-Tab**: Audio- und Kamera-Gerät per Dropdown wählen (live erkannt via `arecord -l` / `v4l2-ctl`)
+- **📷 Kamera-Tab**: FPS auf 5 setzen (Zero-CPU-Limit)
+- **💾 Speichern** — Container muss danach **nicht** neugestartet werden
 
 > ⚠️ **Unbedingt `docker-compose.pi-zero.yml` verwenden!** Das Standard-Compose-File funktioniert auf dem Zero nicht — `/dev/video0` muss als Device-Mount (nicht Volume) eingebunden werden.
 

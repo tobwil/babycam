@@ -44,6 +44,7 @@ Alles lokal. Keine Cloud. Kein Abo. Kein Internet nötig.
 - 📸 **Snapshots** — Automatisch bei anhaltender Bewegung, Schrei oder Geräusch
 - 📱 **Telegram-Alarme** — Push-Benachrichtigung mit Snapshot-Foto
 - 🎛️ **Kamera-Steuerung live** — Helligkeit, Kontrast, Sättigung, Schärfe, Gain (via v4l2-ctl)
+- 🔄 **Audio-/Kamera-Gerät per Dropdown** — Live-Erkennung mit `arecord -l` und `v4l2-ctl`, keine config.json-Editiererei mehr
 - 🌙 **Nachtmodus** — Automatische Erkennung + Helligkeitsboost für Snapshots
 - 📲 **Mobile-optimiertes Dashboard** — Touch-freundliche Regler, Dark Mode
 - 🏠 **Home Assistant Integration** — MQTT Auto-Discovery + Generic Camera
@@ -84,14 +85,6 @@ Getestete Kombinationen:
 git clone https://github.com/tobwil/babycam.git
 cd babycam
 
-# Mikrofon finden
-arecord -l
-# → Card-Nummer merken (C930e meist Card 3)
-
-# config.json anpassen (audio_device)
-nano config.json
-# → "audio_device": "plughw:3,0"
-
 # MQTT-Broker setzen (für Home Assistant)
 # In docker-compose.yml:
 #   MQTT_BROKER=192.168.178.131
@@ -100,6 +93,8 @@ nano config.json
 docker build -t babycam:latest .
 docker compose up -d
 ```
+
+Nach dem Start im Web-UI (`http://<pi-ip>:5000`) unter ⚙️ das passende Audiogerät aus dem Dropdown wählen — live erkannt via `arecord -l`. 💾 Speichern, fertig.
 
 **Webinterface:** `http://<pi-ip>:5000`
 
@@ -111,15 +106,6 @@ Der Pi Zero hat eine schwächere CPU. Deshalb gibt es ein spezielles Compose-Fil
 git clone https://github.com/tobwil/babycam.git
 cd babycam
 
-# Mikrofon finden
-arecord -l
-# → C930e am Zero meist Card 1 (nicht Card 3!)
-
-# config.json anpassen
-nano config.json
-# → "audio_device": "plughw:1,0"
-# → "fps": 5                     # Zero packt max. ~5 FPS
-
 # MQTT-Broker setzen
 # In docker-compose.pi-zero.yml:
 #   MQTT_BROKER=192.168.178.131
@@ -128,6 +114,8 @@ nano config.json
 docker build -t babycam:latest .
 docker compose -f docker-compose.pi-zero.yml up -d
 ```
+
+Nach dem Start im Web-UI (`http://<pi-ip>:5000`) unter ⚙️ Audio- und Kamera-Gerät per Dropdown wählen — live erkannt. 💾 Speichern, fertig. Am Zero auf 5 FPS stellen (📷 Tab).
 
 > ⚠️ **Wichtig:** Immer `docker-compose.pi-zero.yml` verwenden, nicht das Standard-Compose-File! Dieses nutzt `devices:` statt Volume-Mounts für `/dev/video0`.
 
@@ -163,6 +151,7 @@ Diese Instanz sendet Audio-Pegel und Geräuscherkennung per MQTT, auch wenn die 
 
 Alle Einstellungen im Browser unter:
 
+- **🎛️ Geräte** — Audio- und Kamera-Gerät per Dropdown auswählen (live erkannt via `arecord -l` / `v4l2-ctl`)
 - **⚙️ Alarm** — Bewegung, Geräusch, Schrei, Nachtmodus, Telegram
 - **📷 Kamera** — FPS, Helligkeit, Kontrast, Sättigung, Schärfe, Gain
 
@@ -188,7 +177,7 @@ Alle Einstellungen im Browser unter:
   "alert_cooldown_cry": 60,      // Sekunden Pause zwischen Schrei-Alarmen
 
   // ── Kamera ──
-  "camera_device": 0,            // /dev/videoX (0 = erste Kamera)
+  "camera_device": 0,            // /dev/videoX (über Web-UI-Dropdown wählbar)
   "frame_width": 640,            // Bildbreite
   "frame_height": 480,           // Bildhöhe
   "fps": 15,                     // Ziel-FPS (Pi Zero: max 5)
@@ -202,7 +191,7 @@ Alle Einstellungen im Browser unter:
   "camera_gain": 0,              // 0–100
 
   // ── Audio ──
-  "audio_device": "plughw:3,0",  // arecord -l → Card-Nummer
+  "audio_device": "plughw:3,0",  // über Web-UI-Dropdown wählbar
   "audio_rate": 16000,           // Samplerate (8000–48000 Hz)
 
   // ── Modi ──
