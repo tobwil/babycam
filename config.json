@@ -6,7 +6,7 @@
   "cry_freq_high": 800,
   "cry_duration": 1.5,
   "noise_alert_enabled": true,
-  "noise_duration": 1.0,
+  "noise_duration": 1,
   "alert_cooldown_motion": 30,
   "alert_cooldown_cry": 60,
   "motion_duration_min": 8,

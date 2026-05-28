@@ -1,8 +1,8 @@
 # Docker Compose für Pi 4B (pi-one) — mit oder ohne Kamera
 # Verwendung:  docker compose -f docker-compose.pi-one.yml up -d
 #
-# Montiert /dev/video0 und /dev/snd.
-# Falls keine Kamera angeschlossen ist, erkennt der video_thread das selbständig.
+# Montiert /dev/snd für Audio. /dev/video0 wird NICHT gemountet
+# (Kamera läuft am Zero). Der Container startet trotzdem sauber.
 
 services:
   babycam:
@@ -11,8 +11,6 @@ services:
     restart: unless-stopped
     ports:
       - "5000:5000"
-    devices:
-      - /dev/video0:/dev/video0
     volumes:
       - /dev/snd:/dev/snd
       - babycam_data:/app/snapshots
