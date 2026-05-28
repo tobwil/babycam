@@ -470,12 +470,36 @@ def audio_thread():
     cry_counter = 0
     noise_counter = 0
     chunk_size = 1024 * 2
+    last_mqtt_sound = 0  # Throttle MQTT sound publish
+
+    # Non-blocking I/O für schnelles Pipe-Draining
+    import fcntl, os as _os
+    fd = proc.stdout.fileno()
+    fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, fl | _os.O_NONBLOCK)
 
     while True:
         try:
             fresh_cfg = load_config()
-            data = proc.stdout.read(chunk_size)
-            if len(data) < chunk_size:
+            
+            # ── Pipe drain: alle verfügbaren Chunks lesen, nur letzten behalten ──
+            data = None
+            drained = 0
+            while True:
+                try:
+                    chunk = proc.stdout.read(chunk_size)
+                    if chunk and len(chunk) >= chunk_size:
+                        data = chunk
+                        drained += 1
+                    else:
+                        break
+                except BlockingIOError:
+                    break
+            if drained > 3:
+                pass  # Mehr als 3 Chunks gestaut → Pi Zero Modus, OK
+            
+            if data is None:
+                time.sleep(0.05)
                 continue
 
             # Audio-Buffer für Live-Stream
@@ -513,10 +537,13 @@ def audio_thread():
             is_noise = noise_counter >= noise_needed
 
             with lock:
+                now_ts = time.time()
                 state["sound_level"] = round(float(rms), 4)
                 state["cry_detected"] = is_crying
                 state["noise_detected"] = is_noise
-                _mqtt_publish(TOPIC_SOUND, str(round(float(rms), 4)))
+                if now_ts - last_mqtt_sound > 1.0:  # Max 1x/Sekunde
+                    _mqtt_publish(TOPIC_SOUND, str(round(float(rms), 4)))
+                    last_mqtt_sound = now_ts
                 _mqtt_publish_if_changed(TOPIC_CRY, is_crying, "cry")
                 _mqtt_publish_if_changed(TOPIC_NOISE, is_noise, "noise")
                 state["sound_history"].append({
