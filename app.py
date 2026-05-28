@@ -250,7 +250,6 @@ def video_thread():
 
     prev_gray = None
     fps_times = deque(maxlen=30)
-    W, H = config["frame_width"], config["frame_height"]
     last_cam_settings = None  # Track um nur bei Änderung zu setzen
 
     while True:
@@ -258,6 +257,8 @@ def video_thread():
         fresh_cfg = load_config()
         mot_thresh = fresh_cfg["motion_threshold"]
         mot_area = fresh_cfg["motion_min_area"]
+        W = fresh_cfg.get("frame_width", 640)
+        H = fresh_cfg.get("frame_height", 480)
 
         # ── Kamera-Einstellungen nur bei Änderung anwenden (via v4l2-ctl) ──
         cam_auto = fresh_cfg.get("camera_auto", True)
@@ -385,7 +386,8 @@ def video_thread():
             latest_raw_frame = raw  # für Snapshots ohne Overlay
 
         elapsed = time.time() - t0
-        time.sleep(max(0, 1 / config["fps"] - elapsed))
+        fps = fresh_cfg.get("fps", 15)
+        time.sleep(max(0, 1 / fps - elapsed))
 
 
 def save_snapshot(frame, reason):
@@ -602,8 +604,26 @@ def audio_thread():
                             if latest_raw_frame is not None:
                                 save_snapshot(latest_raw_frame, "noise")
 
-        except Exception:
-            time.sleep(0.1)
+        except Exception as e:
+            debug(f"⚠️ Audio-Fehler: {e}")
+            # arecord abgestürzt? Neu starten versuchen
+            if proc.poll() is not None:
+                debug("🔄 arecord neu starten...")
+                try:
+                    proc = subprocess.Popen(
+                        ["arecord", "-D", load_config().get("audio_device", dev), "-f", "S16_LE",
+                         "-r", str(load_config().get("audio_rate", rate)), "-c", "1", "-t", "raw"],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                    )
+                    time.sleep(0.5)
+                    if proc.poll() is not None:
+                        err = proc.stderr.read().decode(errors='replace')[:200]
+                        debug(f"❌ arecord Neustart fehlgeschlagen: {err}")
+                    else:
+                        debug("✅ arecord wieder gestartet")
+                except Exception as e2:
+                    debug(f"❌ arecord Neustart-Fehler: {e2}")
+            time.sleep(1)
 
 
 # ── Flask-Routen ────────────────────────────────────────────────
@@ -623,7 +643,8 @@ def video_feed():
                 frame = latest_frame
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-            time.sleep(1 / config["fps"])
+            fps = load_config().get("fps", 15)
+            time.sleep(1 / fps)
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/api/still')
