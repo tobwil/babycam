@@ -1,0 +1,29 @@
+# Docker Compose für Pi 4B (pi-one) — Backup-Instanz OHNE Kamera
+# Verwendung:  docker compose -f docker-compose.pi-one.yml up -d
+#
+# Der Pi 4B hat keine USB-Kamera (die hängt am Zero).
+# /dev/video0 wird nicht gemountet — der video_thread erkennt das selbständig.
+
+services:
+  babycam:
+    image: babycam:latest
+    container_name: babycam
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # KEIN /dev/video0 — keine Kamera am Pi 4B
+      - /dev/snd:/dev/snd
+      - babycam_data:/app/snapshots
+      - ./config.json:/app/config.json
+    environment:
+      - TZ=Europe/Berlin
+      - MQTT_BROKER=192.168.178.131
+      - MQTT_PORT=1883
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    group_add:
+      - "29"   # audio
+
+volumes:
+  babycam_data:

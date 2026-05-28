@@ -224,7 +224,14 @@ latest_raw_frame = None  # Für Snapshots (ohne Overlay)
 
 def video_thread():
     global latest_frame, latest_raw_frame
-    cap = cv2.VideoCapture(config["camera_device"])
+    try:
+        cap = cv2.VideoCapture(config["camera_device"])
+        if not cap.isOpened():
+            print("[Video] ⚠️  Kamera nicht verfügbar — starte ohne Video-Stream")
+            return
+    except Exception as e:
+        print(f"[Video] ⚠️  Kamera-Fehler: {e} — starte ohne Video-Stream")
+        return
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, config["frame_width"])
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config["frame_height"])
     cap.set(cv2.CAP_PROP_FPS, config["fps"])
