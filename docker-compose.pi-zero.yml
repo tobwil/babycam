@@ -1,0 +1,25 @@
+services:
+  babycam:
+    image: babycam:latest
+    container_name: babycam
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    devices:
+      - /dev/video0:/dev/video0
+      - /dev/snd:/dev/snd
+    volumes:
+      - babycam_data:/app/snapshots
+      - ./config.json:/app/config.json
+    environment:
+      - TZ=Europe/Berlin
+      - MQTT_BROKER=192.168.178.131
+      - MQTT_PORT=1883
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    group_add:
+      - "29"   # audio
+      - "44"   # video
+
+volumes:
+  babycam_data:
