@@ -268,10 +268,13 @@
           <p style="font-size:0.55rem;color:#64748b;margin:2px 0 0 0;">Ausschalten spart CPU & Netzwerk. Alarmierung läuft trotzdem.</p>
         </div>
         <div class="cfg-row">
-          <label>🎛️ Audio-Gerät</label>
-          <input type="text" id="cfg-audio_device" value="plughw:3,0"
-                 style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 8px;font-size:0.75rem;">
-          <span style="font-size:0.55rem;color:#64748b;">Mit <code>arecord -l</code> im Terminal herausfinden (z.B. plughw:1,0)</span>
+          <label>🎛️ Audio-Gerät <button onclick="loadAudioDevices()" style="background:#334155;border:1px solid #475569;color:#94a3b8;border-radius:4px;padding:1px 6px;font-size:0.6rem;cursor:pointer;margin-left:4px;">🔄 Erkennen</button></label>
+          <select id="cfg-audio_device"
+                  style="width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 8px;font-size:0.75rem;"
+                  onchange="document.getElementById('val-audio_device').textContent=this.selectedOptions[0].text">
+            <option value="">⟳ Klicke „Erkennen"…</option>
+          </select>
+          <span style="font-size:0.55rem;color:#64748b;" id="val-audio_device">Automatisch erkennen statt manuell eingeben</span>
         </div>
         <div class="cfg-row">
           <label>🎵 Audio-Qualität <span id="val-audio_rate">16000</span>Hz</label>
@@ -508,6 +511,40 @@
     // Speichern
     await saveConfig();
   }
+
+  // ── Audio-Device-Erkennung ──
+  async function loadAudioDevices() {
+    const select = document.getElementById('cfg-audio_device');
+    const valEl = document.getElementById('val-audio_device');
+    select.innerHTML = '<option value="">⏳ Suche Geräte…</option>';
+    try {
+      const r = await fetch('/api/audio/devices');
+      const data = await r.json();
+      select.innerHTML = '';
+      if (data.devices.length === 0) {
+        select.innerHTML = '<option value="">⚠️ Keine Geräte gefunden</option>';
+        valEl.textContent = 'Keine Capture-Geräte via arecord -l';
+      } else {
+        data.devices.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.device;
+          opt.textContent = d.label;
+          if (d.device === data.current) opt.selected = true;
+          select.appendChild(opt);
+        });
+        valEl.textContent = data.devices.length + ' Gerät(e) gefunden';
+      }
+    } catch(e) {
+      select.innerHTML = '<option value="">❌ Fehler bei arecord -l</option>';
+      valEl.textContent = 'arecord nicht verfügbar?';
+    }
+  }
+  // Auto-Laden beim ersten Öffnen des Alarm-Tabs
+  document.querySelector('.tab[onclick*="config"]').addEventListener('click', function() {
+    if (document.getElementById('cfg-audio_device').options.length <= 1) {
+      loadAudioDevices();
+    }
+  });
 
   // ── Config API ──
   async function loadConfigFromServer() {

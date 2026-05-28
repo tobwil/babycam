@@ -795,6 +795,40 @@ def api_telegram_test():
 
 # ── Kamera-Live-Preview (ohne Config zu speichern) ──────────────
 
+@app.route('/api/audio/devices')
+def api_audio_devices():
+    """Liste aller verfügbaren Capture-Geräte (arecord -l)."""
+    try:
+        result = subprocess.run(
+            ["arecord", "-l"], capture_output=True, text=True, timeout=5
+        )
+        devices = []
+        for line in result.stdout.split("\n"):
+            # Format: "card 1: C930e [Logitech Webcam C930e], device 0: USB Audio [USB Audio]"
+            if line.startswith("card "):
+                parts = line.split(":", 1)
+                card_id = parts[0].replace("card ", "").strip()
+                rest = parts[1] if len(parts) > 1 else ""
+                # Extrahiere device-Nummer
+                dev_match = __import__("re").search(r"device (\d+)", rest)
+                dev_id = dev_match.group(1) if dev_match else "0"
+                # Extrahiere Anzeigename (vor dem Komma, nach ": ")
+                name_match = __import__("re").search(r":\s*(.+?)\s*\[", rest)
+                desc_match = __import__("re").search(r"\[(.+?)\]", rest)
+                name = name_match.group(1).strip() if name_match else rest.split(",")[0].strip()
+                desc = desc_match.group(1) if desc_match else ""
+                devices.append({
+                    "device": f"plughw:{card_id},{dev_id}",
+                    "card": card_id,
+                    "dev": dev_id,
+                    "name": name,
+                    "description": desc,
+                    "label": f"{name} [{desc}] (plughw:{card_id},{dev_id})" if desc else f"{name} (plughw:{card_id},{dev_id})"
+                })
+        return jsonify({"devices": devices, "current": load_config().get("audio_device")})
+    except Exception as e:
+        return jsonify({"devices": [], "error": str(e)})
+
 @app.route('/api/audio/latest')
 def api_audio_latest():
     """Liefert die letzten ~2s Audio als WAV-Datei für Live-Stream."""
