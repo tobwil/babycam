@@ -352,6 +352,12 @@
           <span>📹 Live-Video an Browser senden</span>
           <p style="font-size:0.55rem;color:#64748b;margin:2px 0 0 0;">Ausschalten spart CPU. Bewegungserkennung & Snapshots laufen trotzdem.</p>
         </div>
+        <div class="cfg-row">
+          <label>🎬 Bilder pro Sekunde <span id="val-fps">15</span> FPS</label>
+          <input type="range" min="1" max="30" value="15" id="cfg-fps"
+                 oninput="updateRange('fps')">
+          <span style="font-size:0.55rem;color:#64748b;">1–5 = sparsam (Pi Zero) | 15–30 = flüssig (Pi 4)</span>
+        </div>
         <div class="cfg-toggle">
           <div class="toggle on" id="toggle-camera-auto" onclick="toggleCameraAuto()"></div>
           <span>🤖 Kamera-Automatik (Helligkeit & Belichtung)</span>
